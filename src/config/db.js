@@ -171,24 +171,57 @@ module.exports = {
     return readDb().coupons;
   },
 
+  getCouponUseCount: async (couponId) => {
+    if (useSupabase) {
+      const { count, error } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('coupon_id', couponId);
+      if (error) throw error;
+      return count || 0;
+    }
+    const db = readDb();
+    return db.transactions.filter(t => t.coupon_id === couponId).length;
+  },
+
   getCouponsByCafeId: async (cafeId) => {
+    let coupons = [];
     if (useSupabase) {
       const { data, error } = await supabase.from('coupons').select('*').eq('cafe_id', cafeId);
       if (error) throw error;
-      return data || [];
+      coupons = data || [];
+    } else {
+      const db = readDb();
+      coupons = db.coupons.filter(c => c.cafe_id === cafeId);
     }
-    const db = readDb();
-    return db.coupons.filter(c => c.cafe_id === cafeId);
+
+    const couponsWithRemaining = [];
+    for (const coupon of coupons) {
+      const useCount = await module.exports.getCouponUseCount(coupon.id);
+      couponsWithRemaining.push({
+        ...coupon,
+        remaining_uses: Math.max(0, (coupon.max_uses ?? coupon.frequency_per_day) - useCount)
+      });
+    }
+    return couponsWithRemaining;
   },
 
   getCouponById: async (id) => {
+    let coupon = null;
     if (useSupabase) {
       const { data, error } = await supabase.from('coupons').select('*').eq('id', id).maybeSingle();
       if (error) throw error;
-      return data;
+      coupon = data;
+    } else {
+      const db = readDb();
+      coupon = db.coupons.find(c => c.id === id) || null;
     }
-    const db = readDb();
-    return db.coupons.find(c => c.id === id) || null;
+
+    if (coupon) {
+      const useCount = await module.exports.getCouponUseCount(coupon.id);
+      coupon.remaining_uses = Math.max(0, (coupon.max_uses ?? coupon.frequency_per_day) - useCount);
+    }
+    return coupon;
   },
 
   insertCoupon: async (coupon) => {

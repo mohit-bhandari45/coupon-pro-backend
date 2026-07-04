@@ -120,7 +120,7 @@ async function runTests() {
             badge_label: 'Special',
             discount_type: 'percent',
             discount_value: 20,
-            frequency_per_day: 3
+            max_uses: 3
         };
         const couponRes = await request('POST', '/api/cafe/coupons', couponPayload, {
             'Authorization': `Bearer ${token}`

@@ -21,11 +21,11 @@ class CouponController {
                 });
             }
 
-            // Verify if coupon has remaining count for today
-            if (coupon.remaining_today !== undefined && coupon.remaining_today <= 0) {
+            // Verify if coupon has remaining count
+            if (coupon.remaining_uses !== undefined && coupon.remaining_uses <= 0) {
                 return res.status(400).json({
                     success: false,
-                    message: 'This coupon has been fully redeemed for the day'
+                    message: 'This coupon has been fully redeemed'
                 });
             }
 

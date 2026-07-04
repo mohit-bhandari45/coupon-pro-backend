@@ -63,7 +63,7 @@ class CafeController {
     // Create a new coupon for Cafe Owner
     static async createCoupon(req, res) {
         try {
-            const { title, desc_text, badge_label, discount_type, discount_value, frequency_per_day } = req.body;
+            const { title, desc_text, badge_label, discount_type, discount_value, max_uses, frequency_per_day } = req.body;
             const cafeId = req.cafe.id;
 
             if (!title || !desc_text || !discount_type || discount_value === undefined) {
@@ -73,6 +73,8 @@ class CafeController {
                 });
             }
 
+            const limitValue = max_uses !== undefined && max_uses !== null ? max_uses : frequency_per_day;
+
             const newCoupon = {
                 id: 'c-' + Math.floor(100000 + Math.random() * 900000),
                 cafe_id: cafeId,
@@ -81,7 +83,7 @@ class CafeController {
                 badge_label: badge_label || 'Save',
                 discount_type,
                 discount_value: parseFloat(discount_value),
-                frequency_per_day: frequency_per_day ? parseInt(frequency_per_day) : 1,
+                max_uses: limitValue ? parseInt(limitValue) : 1,
                 is_active: true,
                 created_at: new Date().toISOString()
             };

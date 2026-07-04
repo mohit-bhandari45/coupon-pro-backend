@@ -26,7 +26,7 @@ create table if not exists coupons (
     badge_label text default 'Save',
     discount_type text not null, -- 'percent' or 'flat'
     discount_value numeric not null,
-    frequency_per_day integer default 1,
+    max_uses integer default 1,
     is_active boolean default true,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );

@@ -64,7 +64,7 @@ class CafeModel {
             badge_label: "Save",
             discount_type: "percent",
             discount_value: 10,
-            frequency_per_day: 15,
+            max_uses: 15,
             is_active: true,
             created_at: new Date().toISOString()
         });
@@ -77,7 +77,7 @@ class CafeModel {
             badge_label: "Combo",
             discount_type: "flat",
             discount_value: 49,
-            frequency_per_day: 10,
+            max_uses: 10,
             is_active: true,
             created_at: new Date().toISOString()
         });
