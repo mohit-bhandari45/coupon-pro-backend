@@ -10,6 +10,7 @@ const request = (method, path, body, headers = {}) => {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
+                'Connection': 'close',
                 ...headers
             }
         };
@@ -132,6 +133,88 @@ async function runTests() {
         const verifyRes = await request('GET', `/api/cafe/${slug}`);
         console.log('Verify get details status:', verifyRes.statusCode);
         console.log('Verify get details response Coupons list:', JSON.stringify(verifyRes.data.coupons, null, 2));
+
+        // 7. Test Customer OTP Send
+        console.log('\n7. Testing POST /api/auth/send-otp...');
+        const customerEmail = 'customer-test@example.com';
+        const sendUserOtpRes = await request('POST', '/api/auth/send-otp', { email: customerEmail });
+        console.log('Customer send OTP status:', sendUserOtpRes.statusCode);
+        console.log('Customer send OTP response:', JSON.stringify(sendUserOtpRes.data, null, 2));
+
+        // Fetch OTP from local DB configuration directly for automated verify payload
+        const db = require('./src/config/db');
+        const getLatestOtp = async (email, purpose) => {
+            const codes = await db.getOtpCodes();
+            return codes
+                .filter(o => o.email.toLowerCase() === email.toLowerCase() && o.purpose === purpose)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        };
+
+        const latestUserOtp = await getLatestOtp(customerEmail, 'auth');
+
+        console.log('Latest customer Auth OTP in DB:', latestUserOtp);
+        if (!latestUserOtp) {
+            throw new Error('Customer OTP not recorded in database');
+        }
+
+        // 8. Test Customer OTP Verification
+        console.log('\n8. Testing POST /api/auth/verify-otp...');
+        const verifyUserOtpRes = await request('POST', '/api/auth/verify-otp', {
+            email: customerEmail,
+            code: latestUserOtp.code,
+            name: 'Sarah Connor'
+        });
+        console.log('Customer verify OTP status:', verifyUserOtpRes.statusCode);
+        console.log('Customer verify OTP response:', JSON.stringify(verifyUserOtpRes.data, null, 2));
+        const customerUser = verifyUserOtpRes.data.user;
+
+        // 9. Test Coupon Redemption OTP Send
+        console.log('\n9. Testing POST /api/coupon/send-otp...');
+        const testCoupon = verifyRes.data.coupons[0];
+        if (!testCoupon) {
+            throw new Error('No coupons found to test redemption');
+        }
+        const sendCouponOtpRes = await request('POST', '/api/coupon/send-otp', {
+            email: customerEmail,
+            coupon_id: testCoupon.id
+        });
+        console.log('Coupon send OTP status:', sendCouponOtpRes.statusCode);
+        console.log('Coupon send OTP response:', JSON.stringify(sendCouponOtpRes.data, null, 2));
+
+        // Get latest coupon OTP
+        const latestCouponOtp = await getLatestOtp(customerEmail, 'coupon');
+        console.log('Latest Coupon OTP in DB:', latestCouponOtp);
+        if (!latestCouponOtp) {
+            throw new Error('Coupon OTP not recorded in database');
+        }
+
+        // 10. Test Coupon Redemption OTP Verification
+        console.log('\n10. Testing POST /api/coupon/verify-otp...');
+        const verifyCouponOtpRes = await request('POST', '/api/coupon/verify-otp', {
+            email: customerEmail,
+            code: latestCouponOtp.code
+        });
+        console.log('Coupon verify OTP status:', verifyCouponOtpRes.statusCode);
+        console.log('Coupon verify OTP response:', JSON.stringify(verifyCouponOtpRes.data, null, 2));
+
+        // 11. Test Transaction Creation
+        console.log('\n11. Testing POST /api/transaction/create...');
+        const createTxnRes = await request('POST', '/api/transaction/create', {
+            cafe_id: verifyRes.data.cafe.id,
+            user_id: customerUser.id,
+            coupon_id: testCoupon.id,
+            bill_amount: 100,
+            discount_amount: 20,
+            payable_amount: 80
+        });
+        console.log('Create transaction status:', createTxnRes.statusCode);
+        console.log('Create transaction response:', JSON.stringify(createTxnRes.data, null, 2));
+
+        // 12. Re-Test Cafe Details to check daily occupancy count
+        console.log(`\n12. Re-Testing GET /api/cafe/${slug} to verify remaining_today discount decrement...`);
+        const verifyDecrementRes = await request('GET', `/api/cafe/${slug}`);
+        console.log('Verify get details status:', verifyDecrementRes.statusCode);
+        console.log('Verify remaining_today decrement output:', JSON.stringify(verifyDecrementRes.data.coupons, null, 2));
 
         console.log('\n--- VERIFICATION SUCCESSFUL ---');
     } catch (err) {

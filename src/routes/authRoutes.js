@@ -1,5 +1,6 @@
 const express = require('express');
 const AuthController = require('../controllers/authController');
+const UserAuthController = require('../controllers/userAuthController');
 
 const router = express.Router();
 
@@ -12,4 +13,9 @@ router.get('/me', AuthController.authorize, (req, res) => {
     });
 });
 
+// Customer Authentication
+router.post('/send-otp', UserAuthController.sendOtp);
+router.post('/verify-otp', UserAuthController.verifyOtp);
+
 module.exports = router;
+

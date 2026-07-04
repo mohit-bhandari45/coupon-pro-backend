@@ -50,6 +50,7 @@ function writeDb(data) {
 }
 
 module.exports = {
+  useSupabase,
   // --- CAFES ---
   getAllCafes: async () => {
     if (useSupabase) {
@@ -146,16 +147,6 @@ module.exports = {
     }
     const db = readDb();
     return db.users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
-  },
-
-  getUserByPhone: async (phone) => {
-    if (useSupabase) {
-      const { data, error } = await supabase.from('users').select('*').eq('phone', phone).maybeSingle();
-      if (error) throw error;
-      return data;
-    }
-    const db = readDb();
-    return db.users.find(u => u.phone === phone) || null;
   },
 
   insertUser: async (user) => {
@@ -266,12 +257,12 @@ module.exports = {
     return otp;
   },
 
-  verifyAndUseOtpCode: async (phone, code, purpose) => {
+  verifyAndUseOtpCode: async (email, code, purpose) => {
     if (useSupabase) {
       const nowStr = new Date().toISOString();
       const { data, error } = await supabase.from('otp_codes')
         .select('*')
-        .eq('phone', phone)
+        .eq('email', email)
         .eq('code', code)
         .eq('purpose', purpose)
         .gt('expires_at', nowStr)
@@ -285,7 +276,7 @@ module.exports = {
         // Consume the OTP
         await supabase.from('otp_codes')
           .delete()
-          .eq('phone', phone)
+          .eq('email', email)
           .eq('code', code)
           .eq('purpose', purpose);
         return otp;
@@ -295,7 +286,7 @@ module.exports = {
 
     const db = readDb();
     const index = db.otp_codes.findIndex(
-      otp => otp.phone === phone &&
+      otp => otp.email === email &&
         otp.code === code &&
         otp.purpose === purpose &&
         new Date(otp.expires_at) > new Date()

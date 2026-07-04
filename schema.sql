@@ -34,7 +34,7 @@ create table if not exists coupons (
 -- 3. Users Table
 create table if not exists users (
     id uuid primary key default gen_random_uuid(),
-    phone text unique not null,
+    email text unique not null,
     name text,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
@@ -54,7 +54,7 @@ create table if not exists transactions (
 
 -- 5. OTP verification codes Table
 create table if not exists otp_codes (
-    phone text not null,
+    email text not null,
     code text not null,
     purpose text not null,
     expires_at timestamp with time zone not null,
@@ -65,7 +65,7 @@ create table if not exists otp_codes (
 create index if not exists idx_cafes_slug on cafes(slug);
 create index if not exists idx_coupons_cafe_id on coupons(cafe_id);
 create index if not exists idx_transactions_cafe_id on transactions(cafe_id);
-create index if not exists idx_otp_codes_phone on otp_codes(phone);
+create index if not exists idx_otp_codes_email on otp_codes(email);
 
 -- Disable Row Level Security (RLS) so backend can insert/read data without complex JWT policies
 alter table cafes disable row level security;
@@ -73,3 +73,4 @@ alter table coupons disable row level security;
 alter table users disable row level security;
 alter table transactions disable row level security;
 alter table otp_codes disable row level security;
+

@@ -8,6 +8,8 @@ dotenv.config();
 
 const authRoutes = require('./routes/authRoutes');
 const cafeRoutes = require('./routes/cafeRoutes');
+const couponRoutes = require('./routes/couponRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
 const initDatabase = require('./config/initDb');
 
 const app = express();
@@ -21,6 +23,8 @@ app.use(express.urlencoded({ extended: true }));
 // Routing
 app.use('/api/auth', authRoutes);
 app.use('/api/cafe', cafeRoutes);
+app.use('/api/coupon', couponRoutes);
+app.use('/api/transaction', transactionRoutes);
 
 // Health check and root route
 app.get('/', (req, res) => {
