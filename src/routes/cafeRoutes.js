@@ -10,4 +10,7 @@ router.get('/:slug', CafeController.getBySlug);
 // Private route for cafe owner to update cafe settings
 router.put('/update', AuthController.authorize, CafeController.updateDetails);
 
+// Private route for cafe owner to create a coupon
+router.post('/coupons', AuthController.authorize, CafeController.createCoupon);
+
 module.exports = router;

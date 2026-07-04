@@ -55,6 +55,33 @@ class CafeModel {
 
         const savedCafe = await db.insertCafe(newCafe);
 
+        // Seed 2 mock coupons for development/testing
+        await db.insertCoupon({
+            id: generateUUID(),
+            cafe_id: newCafe.id,
+            title: "10% off right now",
+            desc_text: "Instant · Applied to this bill",
+            badge_label: "Save",
+            discount_type: "percent",
+            discount_value: 10,
+            frequency_per_day: 15,
+            is_active: true,
+            created_at: new Date().toISOString()
+        });
+
+        await db.insertCoupon({
+            id: generateUUID(),
+            cafe_id: newCafe.id,
+            title: "Add Brownie for ₹49",
+            desc_text: "Flat rate combos applied at counter",
+            badge_label: "Combo",
+            discount_type: "flat",
+            discount_value: 49,
+            frequency_per_day: 10,
+            is_active: true,
+            created_at: new Date().toISOString()
+        });
+
         // Return saved cafe detail without password
         const { password: _, ...cafeWithoutPassword } = savedCafe;
         return cafeWithoutPassword;

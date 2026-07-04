@@ -58,7 +58,7 @@ async function runTests() {
         const registerPayload = {
             name: 'The Brew Lounge',
             owner_name: 'Mohit Bhandari',
-            email: 'mohit@brewlounge.com',
+            email: 'mohit-qr3@brewlounge.com',
             password: 'password123',
             address: '102 Cafe Street, Dehradun'
         };
@@ -78,7 +78,7 @@ async function runTests() {
         // 2. Login to Cafe
         console.log('\n2. Testing POST /api/auth/login...');
         const loginPayload = {
-            email: 'mohit@brewlounge.com',
+            email: 'mohit-qr3@brewlounge.com',
             password: 'password123'
         };
         const loginRes = await request('POST', '/api/auth/login', loginPayload);
@@ -110,6 +110,28 @@ async function runTests() {
         });
         console.log('Update details status:', updateRes.statusCode);
         console.log('Update details response:', JSON.stringify(updateRes.data, null, 2));
+
+        // 5. Create a new loyalty coupon
+        console.log('\n5. Testing POST /api/cafe/coupons...');
+        const couponPayload = {
+            title: 'Summer Magic Deal',
+            desc_text: 'Get 20% off on all cold brew varieties',
+            badge_label: 'Special',
+            discount_type: 'percent',
+            discount_value: 20,
+            frequency_per_day: 3
+        };
+        const couponRes = await request('POST', '/api/cafe/coupons', couponPayload, {
+            'Authorization': `Bearer ${token}`
+        });
+        console.log('Create coupon status:', couponRes.statusCode);
+        console.log('Create coupon response:', JSON.stringify(couponRes.data, null, 2));
+
+        // 6. Verify lookup retrieves the new coupon
+        console.log(`\n6. Re-Testing GET /api/cafe/${slug} to verify coupon insertion...`);
+        const verifyRes = await request('GET', `/api/cafe/${slug}`);
+        console.log('Verify get details status:', verifyRes.statusCode);
+        console.log('Verify get details response Coupons list:', JSON.stringify(verifyRes.data.coupons, null, 2));
 
         console.log('\n--- VERIFICATION SUCCESSFUL ---');
     } catch (err) {

@@ -8,6 +8,7 @@ dotenv.config();
 
 const authRoutes = require('./routes/authRoutes');
 const cafeRoutes = require('./routes/cafeRoutes');
+const initDatabase = require('./config/initDb');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,8 +41,16 @@ app.use((err, req, res, next) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+(async () => {
+    try {
+        await initDatabase();
+    } catch (e) {
+        console.error('Failed to run schema init:', e);
+    }
+
+    app.listen(PORT, () => {
+        console.log(`Server is running on http://localhost:${PORT}`);
+    });
+})();
 
 module.exports = app;
