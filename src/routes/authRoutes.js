@@ -16,6 +16,7 @@ router.get('/me', AuthController.authorize, (req, res) => {
 // Customer Authentication
 router.post('/send-otp', UserAuthController.sendOtp);
 router.post('/verify-otp', UserAuthController.verifyOtp);
+router.get('/credits/:email', UserAuthController.getCredits);
 
 module.exports = router;
 

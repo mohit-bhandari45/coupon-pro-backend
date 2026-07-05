@@ -29,6 +29,18 @@ class CouponController {
                 });
             }
 
+            // Check if user has exceeded their lifetime coupon limit (3 max)
+            const user = await db.getUserByEmail(email);
+            if (user) {
+                const totalRedemptions = await db.getUserCouponRedemptionCount(user.id);
+                if (totalRedemptions >= 3) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'You have exhausted your coupon redemption credits limit (3 max)'
+                    });
+                }
+            }
+
             // Generate a 6-digit OTP code string
             const code = Math.floor(100000 + Math.random() * 900000).toString();
             const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins expiration

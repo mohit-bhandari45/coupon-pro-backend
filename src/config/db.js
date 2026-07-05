@@ -256,6 +256,20 @@ module.exports = {
     return db.transactions.filter(t => t.cafe_id === cafeId);
   },
 
+  getUserCouponRedemptionCount: async (userId) => {
+    if (useSupabase) {
+      const { count, error } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .not('coupon_id', 'is', null);
+      if (error) throw error;
+      return count || 0;
+    }
+    const db = readDb();
+    return db.transactions.filter(t => t.user_id === userId && t.coupon_id !== null).length;
+  },
+
   insertTransaction: async (txn) => {
     if (useSupabase) {
       const { data, error } = await supabase.from('transactions').insert(txn).select().single();

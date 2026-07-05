@@ -103,6 +103,25 @@ class CafeController {
             });
         }
     }
+
+    static async getTransactions(req, res) {
+        try {
+            const cafeId = req.cafe.id;
+            console.log('[DEBUG] getTransactions for cafeId:', cafeId);
+            const transactions = await db.getTransactionsByCafeId(cafeId);
+            console.log('[DEBUG] Returned transactions count:', transactions.length, transactions);
+            return res.status(200).json({
+                success: true,
+                transactions
+            });
+        } catch (error) {
+            console.error('Error fetching transactions:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal server error'
+            });
+        }
+    }
 }
 
 module.exports = CafeController;

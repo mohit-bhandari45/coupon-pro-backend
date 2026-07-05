@@ -98,14 +98,53 @@ class UserAuthController {
                 { expiresIn: '30d' }
             );
 
+            // Compute remaining credits (3 max lifetime limit)
+            const count = await db.getUserCouponRedemptionCount(user.id);
+            const remainingCredits = Math.max(0, 3 - count);
+
             return res.status(200).json({
                 success: true,
                 message: 'OTP verified successfully',
                 token,
-                user
+                user,
+                remainingCredits
             });
         } catch (error) {
             console.error('Error verifying user OTP:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal server error'
+            });
+        }
+    }
+
+    static async getCredits(req, res) {
+        try {
+            const { email } = req.params;
+            if (!email) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email address is required'
+                });
+            }
+
+            const user = await db.getUserByEmail(email);
+            if (!user) {
+                return res.status(200).json({
+                    success: true,
+                    count: 0,
+                    remaining: 3
+                });
+            }
+
+            const count = await db.getUserCouponRedemptionCount(user.id);
+            return res.status(200).json({
+                success: true,
+                count,
+                remaining: Math.max(0, 3 - count)
+            });
+        } catch (error) {
+            console.error('Error fetching user credits:', error);
             return res.status(500).json({
                 success: false,
                 message: 'Internal server error'

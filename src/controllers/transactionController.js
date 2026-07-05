@@ -27,6 +27,17 @@ class TransactionController {
                 });
             }
 
+            // Safety check: verify user coupon redemption count (3 max)
+            if (user_id && coupon_id) {
+                const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
+                if (totalRedemptions >= 3) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'User has exhausted coupon redemption credits limit (3 max)'
+                    });
+                }
+            }
+
             const uuid = 't-' + Math.floor(100000 + Math.random() * 900000);
             const newTxn = {
                 id: db.useSupabase ? undefined : uuid,
