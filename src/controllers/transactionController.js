@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const MailService = require('../services/mailService');
 
 class TransactionController {
     static async createTransaction(req, res) {
@@ -57,9 +58,19 @@ class TransactionController {
 └────────────────────────────────────────────────────────┘
 `);
 
+            // Send invoice email to cafe owner asynchronously (so we don't delay client response)
+            MailService.sendCafeOwnerInvoice({
+                cafe,
+                customerEmail: user ? user.email : 'Guest Customer',
+                couponTitle: coupon ? coupon.title : 'None',
+                transaction: savedTxn
+            }).catch(err => {
+                console.error('❌ [Mailer] Async cafe owner invoice sending failed:', err);
+            });
+
             return res.status(201).json({
                 success: true,
-                message: 'Transaction saved and simulated invoice receipt printed',
+                message: 'Transaction saved and invoice email sent to owner',
                 transaction: savedTxn
             });
         } catch (error) {
