@@ -1,47 +1,40 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Create transporter option based on ENV variables
-const smtpHost = process.env.SMTP_HOST;
-const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-const smtpSecure = process.env.SMTP_SECURE === 'true'; // true for 465, false for other ports
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS;
+const resendApiKey = process.env.RESEND_API_KEY;
 const mailFrom = process.env.MAIL_FROM || '"RedPerks" <no-reply@redperks.in>';
 
-let transporter = null;
+let resend = null;
 
-if (smtpHost && smtpUser && smtpPass) {
+if (resendApiKey) {
     try {
-        transporter = nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpSecure,
-            auth: {
-                user: smtpUser,
-                pass: smtpPass
-            }
-        });
-        console.log('⚡ [Mailer] Nodemailer SMTP Mail transporter initialized successfully.');
+        resend = new Resend(resendApiKey);
+        console.log('⚡ [Mailer] Resend client initialized successfully.');
     } catch (err) {
-        console.error('❌ [Mailer] Failed to configure Nodemailer transporter:', err);
+        console.error('❌ [Mailer] Failed to configure Resend client:', err);
     }
 } else {
-    console.log('⚠️ [Mailer] SMTP credentials missing. Using terminal simulation fallback.');
+    console.log('⚠️ [Mailer] RESEND_API_KEY missing. Using terminal simulation fallback.');
 }
 
 class MailService {
     static async sendMail({ to, subject, text, html }) {
-        if (transporter) {
+        if (resend) {
             try {
-                const info = await transporter.sendMail({
+                const { data, error } = await resend.emails.send({
                     from: mailFrom,
                     to,
                     subject,
                     text,
                     html
                 });
-                console.log(`✉️ [Mailer] Real email sent successfully. Message ID: ${info.messageId}`);
-                return { success: true, messageId: info.messageId };
+
+                if (error) {
+                    console.error(`❌ [Mailer] Error sending real email to ${to}:`, error);
+                    return { success: false, error: error.message || String(error) };
+                }
+
+                console.log(`✉️ [Mailer] Real email sent successfully. Message ID: ${data.id}`);
+                return { success: true, messageId: data.id };
             } catch (err) {
                 console.error(`❌ [Mailer] Error sending real email to ${to}:`, err);
                 return { success: false, error: err.message };
