@@ -248,12 +248,24 @@ module.exports = {
 
   getTransactionsByCafeId: async (cafeId) => {
     if (useSupabase) {
-      const { data, error } = await supabase.from('transactions').select('*').eq('cafe_id', cafeId);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, users(name, email), coupons(title)')
+        .eq('cafe_id', cafeId);
       if (error) throw error;
       return data || [];
     }
     const db = readDb();
-    return db.transactions.filter(t => t.cafe_id === cafeId);
+    const txs = db.transactions.filter(t => t.cafe_id === cafeId);
+    return txs.map(t => {
+      const user = db.users.find(u => u.id === t.user_id);
+      const coupon = db.coupons.find(c => c.id === t.coupon_id);
+      return {
+        ...t,
+        users: user ? { name: user.name, email: user.email } : null,
+        coupons: coupon ? { title: coupon.title } : null
+      };
+    });
   },
 
   getUserCouponRedemptionCount: async (userId) => {

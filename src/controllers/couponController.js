@@ -68,9 +68,15 @@ class CouponController {
 └────────────────────────────────────────────────────────┘
 `);
 
+            // Send real email OTP asynchronously
+            const MailService = require('../services/mailService');
+            MailService.sendCouponOtp({ to: email, couponTitle: coupon.title, code }).catch(err => {
+                console.error('❌ [Mailer] Email OTP sending error:', err);
+            });
+
             return res.status(200).json({
                 success: true,
-                message: 'Coupon redemption OTP sent successfully (Simulated in terminal)'
+                message: 'Redemption verification code sent to your email'
             });
         } catch (error) {
             console.error('Error sending coupon validation OTP:', error);

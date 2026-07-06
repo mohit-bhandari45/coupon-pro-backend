@@ -41,9 +41,15 @@ class UserAuthController {
 └────────────────────────────────────────────────────────┘
 `);
 
+            // Send real email OTP asynchronously
+            const MailService = require('../services/mailService');
+            MailService.sendAuthOtp({ to: email, code }).catch(err => {
+                console.error('❌ [Mailer] Email OTP sending error:', err);
+            });
+
             return res.status(200).json({
                 success: true,
-                message: 'OTP sent successfully (Simulated in terminal)'
+                message: 'Verification OTP sent to your email address'
             });
         } catch (error) {
             console.error('Error sending user OTP:', error);

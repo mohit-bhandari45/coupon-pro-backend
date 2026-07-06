@@ -133,6 +133,29 @@ Thank you for choosing Cafe Loyalty!
             html: invoiceHtml
         });
     }
+
+    static async sendAuthOtp({ to, code }) {
+        const subject = `🔑 Verification Code - Cafe Loyalty`;
+        const text = `Your verification code is: ${code}. It is valid for 10 minutes.`;
+        const html = `
+            <h3>Verification Code</h3>
+            <p>Your Cafe Loyalty verification code is: <strong style="font-size: 20px; color: #8b5cf6; letter-spacing: 2px;">${code}</strong></p>
+            <p>This code is valid for 10 minutes. Please do not share it with anyone.</p>
+        `;
+        return this.sendMail({ to, subject, text, html });
+    }
+
+    static async sendCouponOtp({ to, couponTitle, code }) {
+        const subject = `🎁 Coupon Redemption Code - Cafe Loyalty`;
+        const text = `Your redemption code for "${couponTitle}" is: ${code}. It is valid for 10 minutes.`;
+        const html = `
+            <h3>Coupon Redemption Code</h3>
+            <p>You requested to redeem the coupon: <strong>${couponTitle}</strong>.</p>
+            <p>Your validation code is: <strong style="font-size: 20px; color: #8b5cf6; letter-spacing: 2px;">${code}</strong></p>
+            <p>Enter this code at the checkout counter to apply your discount. Valid for 10 minutes.</p>
+        `;
+        return this.sendMail({ to, subject, text, html });
+    }
 }
 
 module.exports = MailService;
