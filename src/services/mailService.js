@@ -70,7 +70,7 @@ Customer:    ${customerEmail || 'Guest Customer'}
 Bill Total:  ₹${parseFloat(transaction.bill_amount).toFixed(2)}
 Discount:    -₹${parseFloat(transaction.discount_amount).toFixed(2)}
 Paid Amount: ₹${parseFloat(transaction.payable_amount).toFixed(2)}
-Date/Time:   ${new Date(transaction.created_at).toLocaleString()}
+Date/Time:   ${new Date(transaction.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 ------------------------------------------
 
 Thank you for choosing RedPerks!
@@ -92,7 +92,7 @@ Thank you for choosing RedPerks!
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Date/Time:</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">${new Date(transaction.created_at).toLocaleString()}</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">${new Date(transaction.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Coupon:</strong></td>
