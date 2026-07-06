@@ -38,6 +38,17 @@ class TransactionController {
                 }
             }
 
+            // Check minimum bill amount cap
+            if (coupon && coupon.min_bill_amount) {
+                const minBill = parseFloat(coupon.min_bill_amount);
+                if (parseFloat(bill_amount) < minBill) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Minimum bill of ₹${minBill.toFixed(2)} is required for this coupon`
+                    });
+                }
+            }
+
             const uuid = 't-' + Math.floor(100000 + Math.random() * 900000);
             const newTxn = {
                 id: db.useSupabase ? undefined : uuid,

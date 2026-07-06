@@ -65,6 +65,7 @@ class CafeModel {
             discount_type: "percent",
             discount_value: 10,
             max_uses: 15,
+            min_bill_amount: 0,
             is_active: true,
             created_at: new Date().toISOString()
         });
@@ -78,6 +79,7 @@ class CafeModel {
             discount_type: "flat",
             discount_value: 49,
             max_uses: 10,
+            min_bill_amount: 0,
             is_active: true,
             created_at: new Date().toISOString()
         });

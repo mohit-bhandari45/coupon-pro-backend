@@ -27,6 +27,7 @@ create table if not exists coupons (
     discount_type text not null, -- 'percent' or 'flat'
     discount_value numeric not null,
     max_uses integer default 1,
+    min_bill_amount numeric default 0,
     is_active boolean default true,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
