@@ -1,7 +1,7 @@
 {
     "name": "cafe-loyalty-backend",
     "version": "1.0.0",
-    "description": "Backend MVC APIs for PWA Cafe Loyalty",
+    "description": "Backend MVC APIs for PWA RedPerks",
     "main": "src/server.js",
     "scripts": {
         "start": "node src/server.js",

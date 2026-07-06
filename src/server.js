@@ -29,7 +29,7 @@ app.use('/api/transaction', transactionRoutes);
 // Health check and root route
 app.get('/', (req, res) => {
     res.json({
-        message: 'Welcome to the Cafe Loyalty PWA API Server',
+        message: 'Welcome to the RedPerks PWA API Server',
         status: 'running',
         version: '1.0.0'
     });
