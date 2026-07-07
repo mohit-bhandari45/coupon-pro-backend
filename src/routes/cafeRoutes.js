@@ -13,6 +13,12 @@ router.put('/update', AuthController.authorize, CafeController.updateDetails);
 // Private route for cafe owner to create a coupon
 router.post('/coupons', AuthController.authorize, CafeController.createCoupon);
 
+// Private route for cafe owner to get all coupons (active and archived)
+router.get('/coupons', AuthController.authorize, CafeController.getOwnerCoupons);
+
+// Private route for cafe owner to toggle a coupon's active status
+router.put('/coupons/:id/toggle-active', AuthController.authorize, CafeController.toggleCouponActive);
+
 // Public route to get cafe and remaining coupons by slug (wildcard at bottom!)
 router.get('/:slug', CafeController.getBySlug);
 

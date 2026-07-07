@@ -15,7 +15,7 @@ class CafeController {
             }
 
             // Fetch coupons for this cafe (will be empty for now but matches schema)
-            const coupons = await db.getCouponsByCafeId(cafe.id);
+            const coupons = await db.getCouponsByCafeId(cafe.id, true);
 
             return res.status(200).json({
                 success: true,
@@ -98,6 +98,62 @@ class CafeController {
             });
         } catch (err) {
             console.error('Error creating coupon:', err);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal server error'
+            });
+        }
+    }
+
+    static async getOwnerCoupons(req, res) {
+        try {
+            const cafeId = req.cafe.id;
+            const coupons = await db.getCouponsByCafeId(cafeId, false);
+            return res.status(200).json({
+                success: true,
+                coupons
+            });
+        } catch (error) {
+            console.error('Error fetching owner coupons:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal server error'
+            });
+        }
+    }
+
+    static async toggleCouponActive(req, res) {
+        try {
+            const cafeId = req.cafe.id;
+            const { id } = req.params;
+            const { is_active } = req.body;
+
+            const coupon = await db.getCouponById(id);
+            if (!coupon) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Coupon not found'
+                });
+            }
+
+            if (coupon.cafe_id !== cafeId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Not authorized to modify this coupon'
+                });
+            }
+
+            const updatedCoupon = await db.updateCoupon(id, {
+                is_active: is_active !== undefined ? is_active : !coupon.is_active
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Coupon status updated successfully',
+                coupon: updatedCoupon
+            });
+        } catch (error) {
+            console.error('Error toggling coupon status:', error);
             return res.status(500).json({
                 success: false,
                 message: 'Internal server error'

@@ -184,15 +184,19 @@ module.exports = {
     return db.transactions.filter(t => t.coupon_id === couponId).length;
   },
 
-  getCouponsByCafeId: async (cafeId) => {
+  getCouponsByCafeId: async (cafeId, onlyActive = false) => {
     let coupons = [];
     if (useSupabase) {
-      const { data, error } = await supabase.from('coupons').select('*').eq('cafe_id', cafeId);
+      let query = supabase.from('coupons').select('*').eq('cafe_id', cafeId);
+      if (onlyActive) {
+        query = query.eq('is_active', true);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       coupons = data || [];
     } else {
       const db = readDb();
-      coupons = db.coupons.filter(c => c.cafe_id === cafeId);
+      coupons = db.coupons.filter(c => c.cafe_id === cafeId && (!onlyActive || c.is_active === true));
     }
 
     const couponsWithRemaining = [];
@@ -234,6 +238,22 @@ module.exports = {
     db.coupons.push(coupon);
     writeDb(db);
     return coupon;
+  },
+
+  updateCoupon: async (id, updates) => {
+    if (useSupabase) {
+      const { data, error } = await supabase.from('coupons').update(updates).eq('id', id).select().maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+    const db = readDb();
+    const index = db.coupons.findIndex(c => c.id === id);
+    if (index !== -1) {
+      db.coupons[index] = { ...db.coupons[index], ...updates };
+      writeDb(db);
+      return db.coupons[index];
+    }
+    throw new Error('Coupon not found');
   },
 
   // --- TRANSACTIONS ---
