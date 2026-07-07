@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post('/register', AuthController.register);
 router.post('/login', AuthController.login);
+router.post('/admin/login', AuthController.adminLogin);
 router.get('/me', AuthController.authorize, (req, res) => {
     return res.status(200).json({
         success: true,

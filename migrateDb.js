@@ -1,15 +1,3 @@
-const dns = require('dns');
-const originalLookup = dns.lookup;
-dns.lookup = function (hostname, options, callback) {
-    if (typeof options === 'function') {
-        callback = options;
-        options = {};
-    }
-    options = options || {};
-    options.family = 4;
-    return originalLookup(hostname, options, callback);
-};
-
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
@@ -32,11 +20,20 @@ async function run() {
         await client.query('DROP TABLE IF EXISTS coupons CASCADE;');
         await client.query('DROP TABLE IF EXISTS users CASCADE;');
         await client.query('DROP TABLE IF EXISTS cafes CASCADE;');
+        await client.query('DROP TABLE IF EXISTS admins CASCADE;');
 
         console.log('Re-running schema.sql queries...');
         const sqlPath = path.join(__dirname, 'schema.sql');
         const sqlContent = fs.readFileSync(sqlPath, 'utf8');
         await client.query(sqlContent);
+
+        console.log('Seeding initial admin account...');
+        const bcrypt = require('bcryptjs');
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await client.query(
+            'INSERT INTO admins (email, password) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING;',
+            ['admin@redperks.com', hashedPassword]
+        );
 
         console.log('Migration successfully completed!');
     } catch (err) {

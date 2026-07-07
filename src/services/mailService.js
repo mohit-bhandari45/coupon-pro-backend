@@ -149,6 +149,33 @@ Thank you for choosing RedPerks!
         `;
         return this.sendMail({ to, subject, text, html });
     }
+
+    static async sendCouponCodeEmail({ to, code, title, desc_text, discount_type, discount_value, min_bill_amount }) {
+        const subject = `🎁 Exclusive Promotion Code - RedPerks`;
+        const ruleStr = discount_type === 'percent' ? `${discount_value}% Off` : `₹${discount_value} Off`;
+        const minStr = min_bill_amount > 0 ? ` on bills above ₹${min_bill_amount}` : '';
+        const text = `Congratulations! You have received a promo code: ${code}.
+Title: ${title} (${desc_text})
+Benefit: ${ruleStr}${minStr}.
+Enter this code at any participating cafe checkout screen to apply your discount.`;
+
+        const html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <h3 style="color: #111827; margin-bottom: 10px;">Congratulations! You've Received a Promo Code</h3>
+                <p style="color: #4b5563; font-size: 14px;">You have been awarded an exclusive customer coupon code:</p>
+                <div style="background-color: #f3f4f6; border-left: 4px solid #ef4444; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0 0 5px 0; font-size: 16px; font-weight: bold; color: #111827;">${title}</p>
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #4b5563;">${desc_text}</p>
+                    <p style="margin: 0; font-size: 28px; font-weight: bold; color: #ef4444; letter-spacing: 1px;">${code}</p>
+                </div>
+                <p style="font-size: 14px; color: #111827;"><strong>Discount:</strong> ${ruleStr}${minStr}</p>
+                <p style="font-size: 14px; color: #6b7280; margin-top: 15px;">Enter this code on the payment checkout page to apply your reward.</p>
+                <p style="font-size: 12px; color: #9ca3af; margin-top: 25px; border-top: 1px solid #f3f4f6; padding-top: 10px;">This is an automated message sent by RedPerks.</p>
+            </div>
+        `;
+
+        return this.sendMail({ to, subject, text, html });
+    }
 }
 
 module.exports = MailService;

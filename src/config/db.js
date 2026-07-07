@@ -172,31 +172,51 @@ module.exports = {
   },
 
   getCouponUseCount: async (couponId) => {
+    let createdAt = null;
     if (useSupabase) {
-      const { count, error } = await supabase
+      const { data: coupon, error: cErr } = await supabase.from('coupons').select('created_at').eq('id', couponId).maybeSingle();
+      if (!cErr && coupon) createdAt = coupon.created_at;
+    } else {
+      const db = readDb();
+      const coupon = db.coupons.find(c => c.id === couponId);
+      if (coupon) createdAt = coupon.created_at;
+    }
+
+    if (useSupabase) {
+      let query = supabase
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('coupon_id', couponId);
+      if (createdAt) {
+        query = query.gte('created_at', createdAt);
+      }
+      const { count, error } = await query;
       if (error) throw error;
       return count || 0;
     }
     const db = readDb();
-    return db.transactions.filter(t => t.coupon_id === couponId).length;
+    return db.transactions.filter(t => t.coupon_id === couponId && (!createdAt || new Date(t.created_at) >= new Date(createdAt))).length;
   },
 
-  getCouponsByCafeId: async (cafeId, onlyActive = false) => {
+  getCouponsByCafeId: async (cafeId, onlyActive = false, onlyPublic = false) => {
     let coupons = [];
     if (useSupabase) {
       let query = supabase.from('coupons').select('*').eq('cafe_id', cafeId);
       if (onlyActive) {
         query = query.eq('is_active', true);
       }
+      if (onlyPublic) {
+        query = query.eq('is_public', true);
+      }
       const { data, error } = await query;
       if (error) throw error;
       coupons = data || [];
     } else {
       const db = readDb();
-      coupons = db.coupons.filter(c => c.cafe_id === cafeId && (!onlyActive || c.is_active === true));
+      coupons = db.coupons.filter(c => c.cafe_id === cafeId &&
+        (!onlyActive || c.is_active === true) &&
+        (!onlyPublic || c.is_public !== false)
+      );
     }
 
     const couponsWithRemaining = [];
@@ -376,5 +396,35 @@ module.exports = {
       return usedOtp;
     }
     return null;
+  },
+
+  getAdminById: async (id) => {
+    if (useSupabase) {
+      const { data, error } = await supabase.from('admins').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+    const db = readDb();
+    return db.admins?.find(a => a.id === id) || null;
+  },
+
+  getAdminByEmail: async (email) => {
+    if (useSupabase) {
+      const { data, error } = await supabase.from('admins').select('*').eq('email', email).maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+    const db = readDb();
+    return db.admins?.find(a => a.email === email) || null;
+  },
+
+  getRegisteredUsers: async () => {
+    if (useSupabase) {
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
+    const db = readDb();
+    return db.users || [];
   }
 };

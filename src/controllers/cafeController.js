@@ -15,7 +15,7 @@ class CafeController {
             }
 
             // Fetch coupons for this cafe (will be empty for now but matches schema)
-            const coupons = await db.getCouponsByCafeId(cafe.id, true);
+            const coupons = await db.getCouponsByCafeId(cafe.id, true, true);
 
             return res.status(200).json({
                 success: true,

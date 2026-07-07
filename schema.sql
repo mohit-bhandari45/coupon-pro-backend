@@ -20,7 +20,7 @@ create table if not exists cafes (
 -- 2. Coupons Table
 create table if not exists coupons (
     id text primary key, -- Supporting both UUIDv4 strings and custom codes (e.g. c-123456)
-    cafe_id uuid references cafes(id) on delete cascade not null,
+    cafe_id uuid references cafes(id) on delete cascade, -- Nullable for admin coupons
     title text not null,
     desc_text text not null,
     badge_label text default 'Save',
@@ -29,6 +29,7 @@ create table if not exists coupons (
     max_uses integer default 1,
     min_bill_amount numeric default 0,
     is_active boolean default true,
+    is_public boolean default true, -- Hidden/code-only vs public loyalty rewards
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -62,6 +63,14 @@ create table if not exists otp_codes (
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
+-- 6. Admins Table
+create table if not exists admins (
+    id uuid primary key default gen_random_uuid(),
+    email text unique not null,
+    password text not null,
+    created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
 -- Indexes for performance
 create index if not exists idx_cafes_slug on cafes(slug);
 create index if not exists idx_coupons_cafe_id on coupons(cafe_id);
@@ -74,4 +83,5 @@ alter table coupons disable row level security;
 alter table users disable row level security;
 alter table transactions disable row level security;
 alter table otp_codes disable row level security;
+alter table admins disable row level security;
 
