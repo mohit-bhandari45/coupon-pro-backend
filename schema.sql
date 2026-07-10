@@ -30,6 +30,7 @@ create table if not exists coupons (
     min_bill_amount numeric default 0,
     is_active boolean default true,
     is_public boolean default true, -- Hidden/code-only vs public loyalty rewards
+    max_claims integer default null,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -84,4 +85,17 @@ alter table users disable row level security;
 alter table transactions disable row level security;
 alter table otp_codes disable row level security;
 alter table admins disable row level security;
+
+-- 7. User Claimed Coupons Table (Coupon Bank / Wallet)
+create table if not exists user_claimed_coupons (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references users(id) on delete cascade,
+    coupon_id text references coupons(id) on delete cascade,
+    status text default 'available', -- 'available', 'used'
+    claimed_at timestamp with time zone default timezone('utc'::text, now()),
+    unique(user_id, coupon_id)
+);
+
+create index if not exists idx_user_claimed_coupons_user_id on user_claimed_coupons(user_id);
+alter table user_claimed_coupons disable row level security;
 

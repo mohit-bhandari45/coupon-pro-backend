@@ -184,6 +184,41 @@ class CouponController {
                         message: 'You have exhausted your coupon redemption credits limit (3 max)'
                     });
                 }
+
+                // Check if user has already redeemed this specific promo code previously
+                let isAlreadyUsed = false;
+                if (db.useSupabase) {
+                    const { data: usedClaim } = await db.supabase
+                        .from('user_claimed_coupons')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .eq('coupon_id', coupon.id)
+                        .eq('status', 'used')
+                        .maybeSingle();
+                    if (usedClaim) isAlreadyUsed = true;
+                } else {
+                    const dbInstance = db.readDb();
+                    isAlreadyUsed = (dbInstance.user_claimed_coupons || []).some(
+                        r => r.user_id === user.id && r.coupon_id === coupon.id && r.status === 'used'
+                    );
+                }
+
+                if (isAlreadyUsed) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'You have already redeemed this promo code'
+                    });
+                }
+
+                // Auto-claim the coupon so it is registered in their bank
+                try {
+                    await db.claimCouponForUser(user.id, coupon.id);
+                } catch (claimErr) {
+                    return res.status(400).json({
+                        success: false,
+                        message: claimErr.message || 'Failed to claim promo code'
+                    });
+                }
             }
 
             return res.status(200).json({

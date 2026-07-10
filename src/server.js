@@ -15,6 +15,7 @@ const cafeRoutes = require('./routes/cafeRoutes');
 const couponRoutes = require('./routes/couponRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 const initDatabase = require('./config/initDb');
 
 const app = express();
@@ -31,6 +32,7 @@ app.use('/api/cafe', cafeRoutes);
 app.use('/api/coupon', couponRoutes);
 app.use('/api/transaction', transactionRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Health check and root route
 app.get('/', (req, res) => {

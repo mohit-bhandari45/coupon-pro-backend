@@ -27,13 +27,26 @@ class TransactionController {
                 });
             }
 
-            // Safety check: verify user coupon redemption count (3 max)
+            // Safety check: verify user coupon redemption count (3 max) for welcome coupons
             if (user_id && coupon_id) {
-                const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
-                if (totalRedemptions >= 3) {
+                const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
+                if (welcomeIds.includes(coupon_id)) {
+                    const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
+                    if (totalRedemptions >= 3) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'User has exhausted welcome coupon redemption credits limit (3 max)'
+                        });
+                    }
+                }
+
+                // Verify coupon is available in user's bank (wallet)
+                const claimedCoupons = await db.getUserClaimedCoupons(user_id, cafe_id);
+                const isClaimedAndAvailable = claimedCoupons.some(c => c.id === coupon_id);
+                if (!isClaimedAndAvailable) {
                     return res.status(400).json({
                         success: false,
-                        message: 'User has exhausted coupon redemption credits limit (3 max)'
+                        message: 'Coupon is not available in your Coupon Bank or has already been redeemed'
                     });
                 }
             }
@@ -63,6 +76,11 @@ class TransactionController {
             };
 
             const savedTxn = await db.insertTransaction(newTxn);
+
+            // Mark the coupon as used in the user's claimed coupons wallet
+            if (user_id && coupon_id) {
+                await db.useClaimedCoupon(user_id, coupon_id);
+            }
 
             // Log customer invoice receipt simulation
             console.log(`

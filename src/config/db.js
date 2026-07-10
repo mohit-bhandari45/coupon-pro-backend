@@ -309,17 +309,18 @@ module.exports = {
   },
 
   getUserCouponRedemptionCount: async (userId) => {
+    const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
     if (useSupabase) {
       const { count, error } = await supabase
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .not('coupon_id', 'is', null);
+        .in('coupon_id', welcomeIds);
       if (error) throw error;
       return count || 0;
     }
     const db = readDb();
-    return db.transactions.filter(t => t.user_id === userId && t.coupon_id !== null).length;
+    return db.transactions.filter(t => t.user_id === userId && welcomeIds.includes(t.coupon_id)).length;
   },
 
   insertTransaction: async (txn) => {
@@ -426,5 +427,229 @@ module.exports = {
     }
     const db = readDb();
     return db.users || [];
+  },
+
+  seedWelcomeCoupons: async (userId) => {
+    const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
+    if (useSupabase) {
+      const { data: existing } = await supabase
+        .from('user_claimed_coupons')
+        .select('coupon_id')
+        .eq('user_id', userId)
+        .in('coupon_id', welcomeIds);
+
+      const claimedSet = new Set((existing || []).map(r => r.coupon_id));
+      const toClaim = welcomeIds.filter(id => !claimedSet.has(id));
+
+      if (toClaim.length > 0) {
+        const rows = toClaim.map(id => ({
+          user_id: userId,
+          coupon_id: id,
+          status: 'available'
+        }));
+        const { error } = await supabase.from('user_claimed_coupons').insert(rows);
+        if (error) throw error;
+      }
+      return;
+    }
+
+    const db = readDb();
+    if (!db.user_claimed_coupons) db.user_claimed_coupons = [];
+    for (const id of welcomeIds) {
+      const exists = db.user_claimed_coupons.some(r => r.user_id === userId && r.coupon_id === id);
+      if (!exists) {
+        db.user_claimed_coupons.push({
+          id: 'ucc-' + Math.floor(100000 + Math.random() * 900000),
+          user_id: userId,
+          coupon_id: id,
+          status: 'available',
+          claimed_at: new Date().toISOString()
+        });
+      }
+    }
+    writeDb(db);
+  },
+
+  getUserClaimedCoupons: async (userId, cafeId) => {
+    if (useSupabase) {
+      const { data, error } = await supabase
+        .from('user_claimed_coupons')
+        .select('*, coupons(*)')
+        .eq('user_id', userId)
+        .eq('status', 'available');
+
+      if (error) throw error;
+
+      return (data || []).map(record => record.coupons).filter(c => {
+        if (!c) return false;
+        return c.cafe_id === null || c.cafe_id === cafeId;
+      });
+    }
+
+    const db = readDb();
+    const claims = (db.user_claimed_coupons || []).filter(r => r.user_id === userId && r.status === 'available');
+    return claims.map(r => {
+      const coupon = (db.coupons || []).find(c => c.id === r.coupon_id);
+      return coupon;
+    }).filter(c => {
+      if (!c) return false;
+      return c.cafe_id === null || c.cafe_id === cafeId;
+    });
+  },
+
+  getAdvertisedCoupons: async (userId) => {
+    const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
+
+    if (useSupabase) {
+      const { data: allCoupons, error: couponError } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('is_active', true)
+        .not('id', 'in', `(${welcomeIds.join(',')})`);
+
+      if (couponError) throw couponError;
+
+      const { data: userClaims, error: claimsError } = await supabase
+        .from('user_claimed_coupons')
+        .select('coupon_id')
+        .eq('user_id', userId);
+
+      if (claimsError) throw claimsError;
+
+      const claimedSet = new Set((userClaims || []).map(r => r.coupon_id));
+
+      const { data: globalShares, error: shareError } = await supabase
+        .from('user_claimed_coupons')
+        .select('coupon_id');
+
+      if (shareError) throw shareError;
+
+      const claimCounts = {};
+      (globalShares || []).forEach(r => {
+        claimCounts[r.coupon_id] = (claimCounts[r.coupon_id] || 0) + 1;
+      });
+
+      return (allCoupons || [])
+        .filter(c => {
+          if (claimedSet.has(c.id)) return false;
+          if (c.max_claims !== null && c.max_claims !== undefined) {
+            const currentClaims = claimCounts[c.id] || 0;
+            if (currentClaims >= c.max_claims) return false;
+          }
+          return true;
+        })
+        .slice(0, 5);
+    }
+
+    const db = readDb();
+    const claimedSet = new Set(
+      (db.user_claimed_coupons || [])
+        .filter(r => r.user_id === userId)
+        .map(r => r.coupon_id)
+    );
+
+    const claimCounts = {};
+    (db.user_claimed_coupons || []).forEach(r => {
+      claimCounts[r.coupon_id] = (claimCounts[r.coupon_id] || 0) + 1;
+    });
+
+    const activeCoupons = (db.coupons || []).filter(c => {
+      return c.is_active && !welcomeIds.includes(c.id) && !claimedSet.has(c.id);
+    });
+
+    return activeCoupons.filter(c => {
+      if (c.max_claims !== undefined && c.max_claims !== null) {
+        const count = claimCounts[c.id] || 0;
+        return count < c.max_claims;
+      }
+      return true;
+    }).slice(0, 5);
+  },
+
+  claimCouponForUser: async (userId, couponId) => {
+    if (useSupabase) {
+      const { data: coupon, error: couponError } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('id', couponId)
+        .maybeSingle();
+
+      if (couponError) throw couponError;
+      if (!coupon) throw new Error('Coupon not found');
+
+      if (coupon.max_claims !== null && coupon.max_claims !== undefined) {
+        const { count, error: countError } = await supabase
+          .from('user_claimed_coupons')
+          .select('*', { count: 'exact', head: true })
+          .eq('coupon_id', couponId);
+
+        if (countError) throw countError;
+        if (count >= coupon.max_claims) {
+          throw new Error('This coupon has reached its maximum claims limit');
+        }
+      }
+
+      const { error } = await supabase
+        .from('user_claimed_coupons')
+        .insert({ user_id: userId, coupon_id: couponId, status: 'available' });
+
+      if (error) {
+        if (error.code === '23505') {
+          return { success: true, message: 'Already claimed' };
+        }
+        throw error;
+      }
+      return { success: true };
+    }
+
+    const db = readDb();
+    if (!db.user_claimed_coupons) db.user_claimed_coupons = [];
+
+    const existingIndex = db.user_claimed_coupons.findIndex(r => r.user_id === userId && r.coupon_id === couponId);
+    if (existingIndex !== -1) {
+      return { success: true, message: 'Already claimed' };
+    }
+
+    const coupon = (db.coupons || []).find(c => c.id === couponId);
+    if (!coupon) throw new Error('Coupon not found');
+
+    if (coupon.max_claims !== undefined && coupon.max_claims !== null) {
+      const count = db.user_claimed_coupons.filter(r => r.coupon_id === couponId).length;
+      if (count >= coupon.max_claims) {
+        throw new Error('This coupon has reached its maximum claims limit');
+      }
+    }
+
+    db.user_claimed_coupons.push({
+      id: 'ucc-' + Math.floor(100000 + Math.random() * 900000),
+      user_id: userId,
+      coupon_id: couponId,
+      status: 'available',
+      claimed_at: new Date().toISOString()
+    });
+
+    writeDb(db);
+    return { success: true };
+  },
+
+  useClaimedCoupon: async (userId, couponId) => {
+    if (useSupabase) {
+      const { error } = await supabase
+        .from('user_claimed_coupons')
+        .update({ status: 'used' })
+        .eq('user_id', userId)
+        .eq('coupon_id', couponId);
+
+      if (error) throw error;
+      return true;
+    }
+
+    const db = readDb();
+    const record = (db.user_claimed_coupons || []).find(r => r.user_id === userId && r.coupon_id === couponId);
+    if (record) {
+      record.status = 'used';
+      writeDb(db);
+    }
+    return true;
   }
 };

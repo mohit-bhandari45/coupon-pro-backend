@@ -97,6 +97,9 @@ class UserAuthController {
                 user = await db.insertUser(newUser);
             }
 
+            // Seed welcome coupons into customer wallet/bank
+            await db.seedWelcomeCoupons(user.id);
+
             // Return customer auth JWT token
             const token = jwt.sign(
                 { id: user.id, email: user.email, role: 'customer' },
