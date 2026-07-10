@@ -138,17 +138,6 @@ Thank you for choosing RedPerks!
         return this.sendMail({ to, subject, text, html });
     }
 
-    static async sendCouponOtp({ to, couponTitle, code }) {
-        const subject = `🎁 Coupon Redemption Code - RedPerks`;
-        const text = `Your redemption code for "${couponTitle}" is: ${code}. It is valid for 10 minutes.`;
-        const html = `
-            <h3>Coupon Redemption Code</h3>
-            <p>You requested to redeem the coupon: <strong>${couponTitle}</strong>.</p>
-            <p>Your validation code is: <strong style="font-size: 20px; color: #8b5cf6; letter-spacing: 2px;">${code}</strong></p>
-            <p>Enter this code at the checkout counter to apply your discount. Valid for 10 minutes.</p>
-        `;
-        return this.sendMail({ to, subject, text, html });
-    }
 
     static async sendCouponCodeEmail({ to, code, title, desc_text, discount_type, discount_value, min_bill_amount }) {
         const subject = `🎁 Exclusive Promotion Code - RedPerks`;
