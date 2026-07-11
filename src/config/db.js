@@ -188,6 +188,32 @@ module.exports = {
     throw new Error('User not found');
   },
 
+  incrementUserWalletBalance: async (userId, amount) => {
+    const balance = parseFloat(amount || 0);
+    if (balance <= 0) return;
+    if (useSupabase) {
+      const { data: user, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      if (fetchError || !user) throw new Error('User not found');
+      const newBal = parseFloat(user.wallet_balance || 0) + balance;
+      const { data, error } = await supabase
+        .from('users')
+        .update({ wallet_balance: newBal })
+        .eq('id', userId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+    const db = readDb();
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      db.users[userIndex].wallet_balance = parseFloat(db.users[userIndex].wallet_balance || 0) + balance;
+      writeDb(db);
+      return db.users[userIndex];
+    }
+    throw new Error('User not found');
+  },
+
   // --- COUPONS ---
   getAllCoupons: async () => {
     if (useSupabase) {

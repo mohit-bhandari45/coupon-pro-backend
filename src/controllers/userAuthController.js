@@ -109,7 +109,7 @@ class UserAuthController {
                     id: db.useSupabase ? undefined : uuid, // If using Supabase Postgres, let gen_random_uuid handle the ID
                     email,
                     name: name || 'Loyal Customer',
-                    wallet_balance: 100.00,
+                    wallet_balance: 0.00,
                     created_at: new Date().toISOString()
                 };
 

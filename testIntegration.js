@@ -61,23 +61,45 @@ async function runTests() {
     }
     console.log('✅ User registered successfully.');
     console.log('User Details:', verifyData.user);
-    if (parseFloat(verifyData.user.wallet_balance) !== 100.00) {
-        throw new Error(`Expected welcome wallet balance of ₹100.00, got: ₹${verifyData.user.wallet_balance}`);
+    if (parseFloat(verifyData.user.wallet_balance) !== 0.00) {
+        throw new Error(`Expected welcome wallet balance of ₹0.00, got: ₹${verifyData.user.wallet_balance}`);
     }
-    console.log('✅ Verified ₹100.00 welcome cashback credited!');
+    console.log('✅ Verified ₹0.00 welcome cashback credited!');
 
     const userToken = verifyData.token;
     const userId = verifyData.user.id;
 
-    // 4. Fetch credits & wallet balance
-    console.log('\n4. Syncing user credits...');
+    // Verify initial credits and wallet balance
+    const initCreditsRes = await fetch(`${API_BASE}/auth/credits/${testEmail}`);
+    const initCreditsData = await initCreditsRes.json();
+    if (initCreditsData.remaining !== 3 || parseFloat(initCreditsData.walletBalance) !== 0.00) {
+        throw new Error('Initial Credits or Wallet Balance mismatch.');
+    }
+    console.log('✅ Verified 3 credits and ₹0.00 initial balance.');
+
+    // Manually set user wallet balance to 100.00 for the remainder of the test suite
+    console.log('Manually settings user wallet balance to 100.00...');
+    if (useSupabase) {
+        const supabase = require('./src/config/supabase');
+        await supabase.from('users').update({ wallet_balance: 100.00 }).eq('id', userId);
+    } else {
+        const dbJson = db.readDb();
+        const uIdx = dbJson.users.findIndex(u => u.id === userId);
+        if (uIdx !== -1) {
+            dbJson.users[uIdx].wallet_balance = 100.00;
+            db.writeDb(dbJson);
+        }
+    }
+
+    // 4. Fetch credits & wallet balance (post manual override)
+    console.log('\n4. Syncing user credits (expected ₹100.00)...');
     const creditsRes = await fetch(`${API_BASE}/auth/credits/${testEmail}`);
     const creditsData = await creditsRes.json();
     console.log('Credits & Wallet Data:', creditsData);
     if (creditsData.remaining !== 3 || parseFloat(creditsData.walletBalance) !== 100.00) {
-        throw new Error('Credits or Wallet Balance mismatch.');
+        throw new Error('Credits or Override Wallet Balance mismatch.');
     }
-    console.log('✅ Verified 3 credits and ₹100.00 balance.');
+    console.log('✅ Verified 3 credits and ₹100.00 override balance.');
 
     // Cafe setup: dynamically find or create a cafe and a merchant coupon
     const cafesList = await db.getAllCafes();
@@ -172,19 +194,37 @@ async function runTests() {
     console.log(`Claiming cafe coupon ${couponId2} inside user Coupon Bank...`);
     await db.claimCouponForUser(userId, couponId2);
 
-    // 5. Try placing 1st transaction applying ₹30.00 wallet cashback
-    console.log('\n5. Creating Transaction 1 (Applying ₹30 cashback)...');
+    // Create a cashback coupon
+    console.log('Seeding a cashback coupon...');
+    const cashbackCouponId = 'c-cb-test-' + Math.floor(100000 + Math.random() * 900000);
+    await db.insertCoupon({
+        id: cashbackCouponId,
+        cafe_id: null,
+        title: 'E2E Cashback Coupon',
+        desc_text: 'Get ₹15 cashback on ₹100 spend.',
+        discount_type: 'cashback',
+        discount_value: 15,
+        max_uses: 9999,
+        min_bill_amount: 100,
+        is_active: true,
+        is_public: true,
+        funded_by: 'platform'
+    });
+    await db.claimCouponForUser(userId, cashbackCouponId);
+
+    // 5. Try placing 1st transaction applying Cashback Coupon (which earns ₹15)
+    console.log('\n5. Creating Transaction 1 (Applying Cashback Coupon)...');
     const tx1Res = await fetch(`${API_BASE}/transaction/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             cafe_id: cafeId,
             user_id: userId,
-            coupon_id: couponId,
+            coupon_id: cashbackCouponId,
             bill_amount: 100.00,
-            discount_amount: 10.00,
-            payable_amount: 60.00,
-            cashback_applied: 30.00
+            discount_amount: 0.00,
+            payable_amount: 100.00,
+            cashback_applied: 0.00
         })
     });
     const tx1Data = await tx1Res.json();
@@ -193,28 +233,28 @@ async function runTests() {
     }
     console.log('✅ Transaction 1 processed successfully:', tx1Data.transaction);
 
-    // Verify wallet balance is deducted
+    // Verify wallet balance is increased (100 + 15 = 115)
     const syncRes1 = await fetch(`${API_BASE}/auth/credits/${testEmail}`);
     const syncData1 = await syncRes1.json();
     console.log('Synced Balance:', syncData1);
-    if (parseFloat(syncData1.walletBalance) !== 70.00) {
-        throw new Error(`Expected wallet balance to be ₹70.00, got: ₹${syncData1.walletBalance}`);
+    if (parseFloat(syncData1.walletBalance) !== 115.00) {
+        throw new Error(`Expected wallet balance to be ₹115.00, got: ₹${syncData1.walletBalance}`);
     }
-    console.log('✅ Verified wallet balance deducted to ₹70.00.');
+    console.log('✅ Verified wallet balance increased to ₹115.00. (Remaining credits: ' + syncData1.remaining + ')');
 
-    // 6. Complete remaining 1 claim (2 remaining before, WELCOME10 used 1, and tx1 used 1, so 1 remaining)
-    console.log('\n6. Creating Transaction 2 (applying ₹20 cashback)...');
+    // 6. Transaction 2 using normal coupon, applying ₹90.00 cashback
+    console.log('\n6. Creating Transaction 2 (applying ₹90 cashback)...');
     const tx2Res = await fetch(`${API_BASE}/transaction/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             cafe_id: cafeId,
             user_id: userId,
-            coupon_id: couponId2,
+            coupon_id: couponId,
             bill_amount: 100.00,
             discount_amount: 10.00,
-            payable_amount: 70.00,
-            cashback_applied: 20.00
+            payable_amount: 0.00,
+            cashback_applied: 90.00
         })
     });
     const tx2Data = await tx2Res.json();
@@ -223,38 +263,38 @@ async function runTests() {
     }
     console.log('✅ Transaction 2 processed.');
 
-    // Sync to verify credits are now 0 and cashback wallet is ₹50.00
-    const syncRes3 = await fetch(`${API_BASE}/auth/credits/${testEmail}`);
-    const syncData3 = await syncRes3.json();
-    console.log('Synced Balance after 3 claims:', syncData3);
-    if (syncData3.remaining !== 0) {
-        throw new Error(`Expected remaining credits to be 0, got: ${syncData3.remaining}`);
+    // Sync to verify remaining wallet balance is (115 - 90 = 25) and 3 claims has been reached
+    const syncRes2 = await fetch(`${API_BASE}/auth/credits/${testEmail}`);
+    const syncData2 = await syncRes2.json();
+    console.log('Synced Balance after 2 claims:', syncData2);
+    if (parseFloat(syncData2.walletBalance) !== 25.00) {
+        throw new Error(`Expected wallet balance to be ₹25.00, got: ₹${syncData2.walletBalance}`);
     }
-    if (parseFloat(syncData3.walletBalance) !== 50.00) {
-        throw new Error(`Expected wallet balance to be ₹50.00, got: ₹${syncData3.walletBalance}`);
+    if (syncData2.remaining !== 0) {
+        throw new Error(`Expected remaining credits to be 0, got: ${syncData2.remaining}`);
     }
-    console.log('✅ Verified credits completely exhausted (0 remaining).');
 
-    // 7. Try a 4th transaction using coupon - should fail with credit exhaustion!
-    console.log('\n8. Attempting 4th Transaction (should fail due to credit exhaustion)...');
-    const tx4Res = await fetch(`${API_BASE}/transaction/create`, {
+    // 7. Transaction 3 using couponId2 - should fail because credit limit (3) is exhausted!
+    console.log('\n7. Creating Transaction 3 (applying ₹25 cashback, should fail due to credit exhaustion)...');
+    const tx3Res = await fetch(`${API_BASE}/transaction/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             cafe_id: cafeId,
             user_id: userId,
-            coupon_id: couponId3,
+            coupon_id: couponId2,
             bill_amount: 100.00,
             discount_amount: 10.00,
-            payable_amount: 90.00
+            payable_amount: 65.00,
+            cashback_applied: 25.00
         })
     });
-    const tx4Data = await tx4Res.json();
-    console.log('Result of 4th Transaction:', tx4Data);
-    if (tx4Data.success) {
-        throw new Error('Allowed 4th transaction despite credit limits!');
+    const tx3Data = await tx3Res.json();
+    console.log('Result of Transaction 3:', tx3Data);
+    if (tx3Data.success) {
+        throw new Error('Allowed 3rd transaction despite credit limits!');
     }
-    console.log('✅ Verified 4th transaction correctly blocked with message:', tx4Data.message);
+    console.log('✅ Verified Transaction 3 correctly blocked with message:', tx3Data.message);
 
     console.log('\n✨ ALL E2E INTEGRATION TESTS PASSED SUCCESSFULLY! ✨');
 }

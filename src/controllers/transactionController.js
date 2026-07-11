@@ -108,6 +108,12 @@ class TransactionController {
             // Mark the coupon as used in the user's claimed coupons wallet
             if (user_id && coupon_id) {
                 await db.useClaimedCoupon(user_id, coupon_id);
+                if (coupon && coupon.discount_type === 'cashback') {
+                    const earned = parseFloat(coupon.discount_value || 0);
+                    if (earned > 0) {
+                        await db.incrementUserWalletBalance(user_id, earned);
+                    }
+                }
             }
 
             // Deduct applied cashback from user account
