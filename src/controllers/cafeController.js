@@ -34,7 +34,7 @@ class CafeController {
     // Update Cafe details (optional, but extremely useful for Cafe Owner Dashboard settings check!)
     static async updateDetails(req, res) {
         try {
-            const { name, owner_name, email, address, upi_id } = req.body;
+            const { name, owner_name, email, address, upi_id, allow_platform_coupons } = req.body;
             const cafeId = req.cafe.id;
 
             const updates = {};
@@ -43,6 +43,9 @@ class CafeController {
             if (email) updates.email = email;
             if (address) updates.address = address;
             if (upi_id !== undefined) updates.upi_id = upi_id;
+            if (allow_platform_coupons !== undefined) {
+                updates.allow_platform_coupons = allow_platform_coupons === true || allow_platform_coupons === 'true';
+            }
 
             const updatedCafe = await db.updateCafe(cafeId, updates);
 
@@ -84,6 +87,7 @@ class CafeController {
                 discount_type,
                 discount_value: parseFloat(discount_value),
                 max_uses: limitValue ? parseInt(limitValue) : 1,
+                max_claims: limitValue ? parseInt(limitValue) : 1,
                 min_bill_amount: min_bill_amount ? parseFloat(min_bill_amount) : 0,
                 is_active: true,
                 created_at: new Date().toISOString()
@@ -165,11 +169,15 @@ class CafeController {
         try {
             const cafeId = req.cafe.id;
             console.log('[DEBUG] getTransactions for cafeId:', cafeId);
-            const transactions = await db.getTransactionsByCafeId(cafeId);
-            console.log('[DEBUG] Returned transactions count:', transactions.length, transactions);
+            const [transactions, metrics] = await Promise.all([
+                db.getTransactionsByCafeId(cafeId),
+                db.getCafeCustomerMetrics(cafeId)
+            ]);
+            console.log('[DEBUG] Returned transactions count:', transactions.length, 'Metrics:', metrics);
             return res.status(200).json({
                 success: true,
-                transactions
+                transactions,
+                metrics
             });
         } catch (error) {
             console.error('Error fetching transactions:', error);

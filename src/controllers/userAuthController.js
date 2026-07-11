@@ -6,13 +6,31 @@ const JWT_SECRET = process.env.JWT_SECRET || 'cafe-loyalty-fallback-secret-key';
 class UserAuthController {
     static async sendOtp(req, res) {
         try {
-            const { email } = req.body;
+            const { email, mode } = req.body;
 
             if (!email) {
                 return res.status(400).json({
                     success: false,
                     message: 'Email address is required'
                 });
+            }
+
+            if (mode === 'login') {
+                const user = await db.getUserByEmail(email);
+                if (!user) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'This email is not registered. Please Sign Up to create an account.'
+                    });
+                }
+            } else if (mode === 'register') {
+                const user = await db.getUserByEmail(email);
+                if (user) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Email is already registered. Please Sign In instead.'
+                    });
+                }
             }
 
             // Generate a 6-digit OTP code string
@@ -91,6 +109,7 @@ class UserAuthController {
                     id: db.useSupabase ? undefined : uuid, // If using Supabase Postgres, let gen_random_uuid handle the ID
                     email,
                     name: name || 'Loyal Customer',
+                    wallet_balance: 100.00,
                     created_at: new Date().toISOString()
                 };
 
@@ -142,7 +161,8 @@ class UserAuthController {
                 return res.status(200).json({
                     success: true,
                     count: 0,
-                    remaining: 3
+                    remaining: 3,
+                    walletBalance: 0
                 });
             }
 
@@ -150,7 +170,8 @@ class UserAuthController {
             return res.status(200).json({
                 success: true,
                 count,
-                remaining: Math.max(0, 3 - count)
+                remaining: Math.max(0, 3 - count),
+                walletBalance: parseFloat(user.wallet_balance || 0)
             });
         } catch (error) {
             console.error('Error fetching user credits:', error);

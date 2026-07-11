@@ -104,6 +104,7 @@ class AdminController {
                             discount_value: parseFloat(discount_value),
                             min_bill_amount: min_bill_amount ? parseFloat(min_bill_amount) : 0,
                             max_uses: max_uses ? parseInt(max_uses) : 1,
+                            max_claims: max_uses ? parseInt(max_uses) : 1,
                             created_at: new Date().toISOString(),
                             is_active: true
                         });
@@ -153,6 +154,7 @@ class AdminController {
                 discount_type,
                 discount_value: parseFloat(discount_value),
                 max_uses: max_uses ? parseInt(max_uses) : 1,
+                max_claims: max_uses ? parseInt(max_uses) : 1,
                 min_bill_amount: min_bill_amount ? parseFloat(min_bill_amount) : 0,
                 is_active: true,
                 is_public: false, // Promo code-only: do not show in public selectable loyalty lists

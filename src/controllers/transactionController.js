@@ -4,12 +4,12 @@ const MailService = require('../services/mailService');
 class TransactionController {
     static async createTransaction(req, res) {
         try {
-            const { cafe_id, user_id, coupon_id, bill_amount, discount_amount, payable_amount } = req.body;
+            const { cafe_id, user_id, coupon_id, bill_amount, discount_amount, payable_amount, cashback_applied } = req.body;
 
-            if (!cafe_id || !bill_amount || !payable_amount) {
+            if (!cafe_id || !bill_amount) {
                 return res.status(400).json({
                     success: false,
-                    message: 'cafe_id, bill_amount, and payable_amount are required'
+                    message: 'cafe_id and bill_amount are required'
                 });
             }
 
@@ -27,17 +27,22 @@ class TransactionController {
                 });
             }
 
-            // Safety check: verify user coupon redemption count (3 max) for welcome coupons
+            if (user_id && !user) {
+                return res.status(401).json({
+                    success: false,
+                    session_expired: true,
+                    message: 'User session not found in system. Please sign in again.'
+                });
+            }
+
+            // Safety check: verify user has remaining credit balance for any coupon redemption
             if (user_id && coupon_id) {
-                const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
-                if (welcomeIds.includes(coupon_id)) {
-                    const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
-                    if (totalRedemptions >= 3) {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'User has exhausted welcome coupon redemption credits limit (3 max)'
-                        });
-                    }
+                const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
+                if (totalRedemptions >= 3) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'You have exhausted your coupon redemption credits balance (3 max)'
+                    });
                 }
 
                 // Verify coupon is available in user's bank (wallet)
@@ -47,6 +52,28 @@ class TransactionController {
                     return res.status(400).json({
                         success: false,
                         message: 'Coupon is not available in your Coupon Bank or has already been redeemed'
+                    });
+                }
+            }
+
+            // Check applied cashback balance
+            const cashbackAmount = parseFloat(cashback_applied || 0);
+            if (user_id && cashbackAmount > 0) {
+                const balance = parseFloat(user.wallet_balance || 0);
+                if (cashbackAmount > balance + 0.01) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Insufficient cashback wallet balance. Available: ₹${balance.toFixed(2)}`
+                    });
+                }
+            }
+
+            // Check if coupon is platform-funded and store allows it
+            if (coupon && coupon.funded_by === 'platform') {
+                if (cafe.allow_platform_coupons === false || cafe.allow_platform_coupons === 'false') {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'This café does not accept platform promotional codes.'
                     });
                 }
             }
@@ -71,6 +98,7 @@ class TransactionController {
                 bill_amount: parseFloat(bill_amount),
                 discount_amount: parseFloat(discount_amount || 0),
                 payable_amount: parseFloat(payable_amount),
+                cashback_applied: cashbackAmount,
                 status: 'completed', // auto-complete for coupon flow
                 created_at: new Date().toISOString()
             };
@@ -80,6 +108,11 @@ class TransactionController {
             // Mark the coupon as used in the user's claimed coupons wallet
             if (user_id && coupon_id) {
                 await db.useClaimedCoupon(user_id, coupon_id);
+            }
+
+            // Deduct applied cashback from user account
+            if (user_id && cashbackAmount > 0) {
+                await db.deductUserWalletBalance(user_id, cashbackAmount);
             }
 
             // Log customer invoice receipt simulation
@@ -93,6 +126,7 @@ class TransactionController {
 │ Coupon:     ${(coupon ? coupon.title : 'None').substring(0, 38).padEnd(38)} │
 │ Bill:       ₹${parseFloat(bill_amount).toFixed(2).padEnd(37)} │
 │ Discount:   -₹${parseFloat(discount_amount || 0).toFixed(2).padEnd(36)} │
+│ Cashback:   -₹${cashbackAmount.toFixed(2).padEnd(36)} │
 │ Paid:       ₹${parseFloat(payable_amount).toFixed(2).padEnd(37)} │
 │ Status:     COMPLETED                                  │
 └────────────────────────────────────────────────────────┘
@@ -103,7 +137,10 @@ class TransactionController {
                 cafe,
                 customerEmail: user ? user.email : 'Guest Customer',
                 couponTitle: coupon ? coupon.title : 'None',
-                transaction: savedTxn
+                transaction: {
+                    ...savedTxn,
+                    cashback_applied: cashbackAmount
+                }
             }).catch(err => {
                 console.error('❌ [Mailer] Async cafe owner invoice sending failed:', err);
             });

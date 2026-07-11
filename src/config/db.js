@@ -51,6 +51,7 @@ function writeDb(data) {
 
 module.exports = {
   useSupabase,
+  supabase,
   // --- CAFES ---
   getAllCafes: async () => {
     if (useSupabase) {
@@ -161,6 +162,32 @@ module.exports = {
     return user;
   },
 
+  deductUserWalletBalance: async (userId, amount) => {
+    const balance = parseFloat(amount || 0);
+    if (balance <= 0) return;
+    if (useSupabase) {
+      const { data: user, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      if (fetchError || !user) throw new Error('User not found');
+      const newBal = Math.max(0, parseFloat(user.wallet_balance || 0) - balance);
+      const { data, error } = await supabase
+        .from('users')
+        .update({ wallet_balance: newBal })
+        .eq('id', userId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+    const db = readDb();
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      db.users[userIndex].wallet_balance = Math.max(0, parseFloat(db.users[userIndex].wallet_balance || 0) - balance);
+      writeDb(db);
+      return db.users[userIndex];
+    }
+    throw new Error('User not found');
+  },
+
   // --- COUPONS ---
   getAllCoupons: async () => {
     if (useSupabase) {
@@ -233,12 +260,12 @@ module.exports = {
   getCouponById: async (id) => {
     let coupon = null;
     if (useSupabase) {
-      const { data, error } = await supabase.from('coupons').select('*').eq('id', id).maybeSingle();
+      const { data, error } = await supabase.from('coupons').select('*').ilike('id', id).maybeSingle();
       if (error) throw error;
       coupon = data;
     } else {
       const db = readDb();
-      coupon = db.coupons.find(c => c.id === id) || null;
+      coupon = db.coupons.find(c => c.id.toLowerCase() === id.toLowerCase()) || null;
     }
 
     if (coupon) {
@@ -309,18 +336,46 @@ module.exports = {
   },
 
   getUserCouponRedemptionCount: async (userId) => {
-    const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
     if (useSupabase) {
       const { count, error } = await supabase
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .in('coupon_id', welcomeIds);
+        .not('coupon_id', 'is', null);
       if (error) throw error;
       return count || 0;
     }
     const db = readDb();
-    return db.transactions.filter(t => t.user_id === userId && welcomeIds.includes(t.coupon_id)).length;
+    return (db.transactions || []).filter(t => t.user_id === userId && t.coupon_id !== null).length;
+  },
+
+  getCafeCustomerMetrics: async (cafeId) => {
+    const transactions = await module.exports.getTransactionsByCafeId(cafeId);
+    const userTxns = (transactions || []).filter(t => t.user_id);
+
+    // Sort chronologically
+    userTxns.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const seenUsers = new Set();
+    let newCustomers = 0;
+    let repeatCustomers = 0;
+
+    userTxns.forEach(t => {
+      const uId = String(t.user_id);
+      if (seenUsers.has(uId)) {
+        repeatCustomers++;
+      } else {
+        newCustomers++;
+        seenUsers.add(uId);
+      }
+    });
+
+    return {
+      newCustomers,
+      repeatCustomers,
+      totalCustomers: seenUsers.size,
+      totalTransactions: userTxns.length
+    };
   },
 
   insertTransaction: async (txn) => {
@@ -503,7 +558,12 @@ module.exports = {
     if (useSupabase) {
       const { data: allCoupons, error: couponError } = await supabase
         .from('coupons')
-        .select('*')
+        .select(`
+          *,
+          cafes (
+            name
+          )
+        `)
         .eq('is_active', true)
         .not('id', 'in', `(${welcomeIds.join(',')})`);
 
@@ -531,6 +591,7 @@ module.exports = {
 
       return (allCoupons || [])
         .filter(c => {
+          if (c.cafe_id === null || c.cafe_id === undefined) return false; // Hide platform/admin coupons
           if (claimedSet.has(c.id)) return false;
           if (c.max_claims !== null && c.max_claims !== undefined) {
             const currentClaims = claimCounts[c.id] || 0;
@@ -538,6 +599,10 @@ module.exports = {
           }
           return true;
         })
+        .map(c => ({
+          ...c,
+          cafe_name: c.cafes ? c.cafes.name : 'Platform Promo'
+        }))
         .slice(0, 5);
     }
 
@@ -554,7 +619,7 @@ module.exports = {
     });
 
     const activeCoupons = (db.coupons || []).filter(c => {
-      return c.is_active && !welcomeIds.includes(c.id) && !claimedSet.has(c.id);
+      return c.is_active && c.cafe_id !== null && !welcomeIds.includes(c.id) && !claimedSet.has(c.id);
     });
 
     return activeCoupons.filter(c => {
@@ -563,6 +628,12 @@ module.exports = {
         return count < c.max_claims;
       }
       return true;
+    }).map(c => {
+      const cafe = (db.cafes || []).find(f => String(f.id) === String(c.cafe_id));
+      return {
+        ...c,
+        cafe_name: cafe ? cafe.name : 'Platform Promo'
+      };
     }).slice(0, 5);
   },
 

@@ -14,6 +14,7 @@ create table if not exists cafes (
     address text not null,
     logo_url text,
     upi_id text,
+    allow_platform_coupons boolean default true,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -31,6 +32,7 @@ create table if not exists coupons (
     is_active boolean default true,
     is_public boolean default true, -- Hidden/code-only vs public loyalty rewards
     max_claims integer default null,
+    funded_by text default 'merchant',
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 

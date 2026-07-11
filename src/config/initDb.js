@@ -24,7 +24,11 @@ async function initDatabase() {
     });
 
     try {
-        await client.connect();
+        const connectPromise = client.connect();
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('PostgreSQL connection timed out (15s). Direct connection port 5432 might be blocked by firewall.')), 15000)
+        );
+        await Promise.race([connectPromise, timeoutPromise]);
 
         // Check if the 'cafes' table exists
         const checkRes = await client.query(`
@@ -53,6 +57,10 @@ async function initDatabase() {
         console.log('[Database] Validating Coupon Bank user_claimed_coupons constraints...');
         await client.query(`
             ALTER TABLE coupons ADD COLUMN IF NOT EXISTS max_claims INTEGER DEFAULT NULL;
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS funded_by VARCHAR DEFAULT 'merchant';
+            ALTER TABLE cafes ADD COLUMN IF NOT EXISTS allow_platform_coupons BOOLEAN DEFAULT true;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC DEFAULT 0;
+            ALTER TABLE transactions ADD COLUMN IF NOT EXISTS cashback_applied NUMERIC DEFAULT 0;
             CREATE TABLE IF NOT EXISTS user_claimed_coupons (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -107,8 +115,8 @@ async function initDatabase() {
 
         for (const c of welcomeCoupons) {
             await client.query(`
-                INSERT INTO coupons (id, cafe_id, title, desc_text, badge_label, discount_type, discount_value, max_uses, min_bill_amount, is_active, is_public, max_claims)
-                VALUES ($1, NULL, $2, $3, 'Welcome', $4, $5, $6, $7, $8, $9, NULL)
+                INSERT INTO coupons (id, cafe_id, title, desc_text, badge_label, discount_type, discount_value, max_uses, min_bill_amount, is_active, is_public, max_claims, funded_by)
+                VALUES ($1, NULL, $2, $3, 'Welcome', $4, $5, $6, $7, $8, $9, NULL, 'platform')
                 ON CONFLICT (id) DO UPDATE SET
                     title = EXCLUDED.title,
                     desc_text = EXCLUDED.desc_text,
@@ -117,7 +125,8 @@ async function initDatabase() {
                     max_uses = EXCLUDED.max_uses,
                     min_bill_amount = EXCLUDED.min_bill_amount,
                     is_active = EXCLUDED.is_active,
-                    is_public = EXCLUDED.is_public;
+                    is_public = EXCLUDED.is_public,
+                    funded_by = EXCLUDED.funded_by;
             `, [c.id, c.title, c.desc_text, c.discount_type, c.discount_value, c.max_uses, c.min_bill_amount, c.is_active, c.is_public]);
         }
         console.log('✅ [Database] Platform welcome coupons verified and seeded!');
