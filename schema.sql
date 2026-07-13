@@ -93,6 +93,7 @@ create table if not exists user_claimed_coupons (
     id uuid primary key default gen_random_uuid(),
     user_id uuid references users(id) on delete cascade,
     coupon_id text references coupons(id) on delete cascade,
+    referred_by uuid references users(id) on delete set null,
     status text default 'available', -- 'available', 'used'
     claimed_at timestamp with time zone default timezone('utc'::text, now()),
     unique(user_id, coupon_id)

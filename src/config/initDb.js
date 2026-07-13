@@ -69,6 +69,7 @@ async function initDatabase() {
                 claimed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
                 UNIQUE(user_id, coupon_id)
             );
+            ALTER TABLE user_claimed_coupons ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES users(id) ON DELETE SET NULL;
         `);
         try {
             await client.query(`ALTER TABLE user_claimed_coupons DISABLE ROW LEVEL SECURITY;`);

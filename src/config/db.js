@@ -561,7 +561,14 @@ module.exports = {
 
       if (error) throw error;
 
-      return (data || []).map(record => record.coupons).filter(c => {
+      return (data || []).map(record => {
+        if (!record.coupons) return null;
+        return {
+          ...record.coupons,
+          referred_by: record.referred_by,
+          claim_id: record.id
+        };
+      }).filter(c => {
         if (!c) return false;
         return c.cafe_id === null || c.cafe_id === cafeId;
       });
@@ -571,7 +578,12 @@ module.exports = {
     const claims = (db.user_claimed_coupons || []).filter(r => r.user_id === userId && r.status === 'available');
     return claims.map(r => {
       const coupon = (db.coupons || []).find(c => c.id === r.coupon_id);
-      return coupon;
+      if (!coupon) return null;
+      return {
+        ...coupon,
+        referred_by: r.referred_by,
+        claim_id: r.id
+      };
     }).filter(c => {
       if (!c) return false;
       return c.cafe_id === null || c.cafe_id === cafeId;
@@ -663,7 +675,7 @@ module.exports = {
     }).slice(0, 5);
   },
 
-  claimCouponForUser: async (userId, couponId) => {
+  claimCouponForUser: async (userId, couponId, referredBy = null) => {
     if (useSupabase) {
       const { data: coupon, error: couponError } = await supabase
         .from('coupons')
@@ -688,7 +700,7 @@ module.exports = {
 
       const { error } = await supabase
         .from('user_claimed_coupons')
-        .insert({ user_id: userId, coupon_id: couponId, status: 'available' });
+        .insert({ user_id: userId, coupon_id: couponId, referred_by: referredBy, status: 'available' });
 
       if (error) {
         if (error.code === '23505') {
@@ -721,12 +733,31 @@ module.exports = {
       id: 'ucc-' + Math.floor(100000 + Math.random() * 900000),
       user_id: userId,
       coupon_id: couponId,
+      referred_by: referredBy,
       status: 'available',
       claimed_at: new Date().toISOString()
     });
 
     writeDb(db);
     return { success: true };
+  },
+
+  getClaimedCoupon: async (userId, couponId) => {
+    if (useSupabase) {
+      const { data, error } = await supabase
+        .from('user_claimed_coupons')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('coupon_id', couponId)
+        .eq('status', 'available')
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    }
+
+    const db = readDb();
+    return (db.user_claimed_coupons || []).find(r => r.user_id === userId && r.coupon_id === couponId && r.status === 'available') || null;
   },
 
   useClaimedCoupon: async (userId, couponId) => {
@@ -748,5 +779,38 @@ module.exports = {
       writeDb(db);
     }
     return true;
+  },
+
+  shareCoupon: async (referrerId, couponId, refereeEmail) => {
+    if (['WELCOME10', 'FREEBUI', 'FEST25'].includes(couponId)) {
+      throw new Error("Welcome coupons are not shareable!");
+    }
+    const referee = await module.exports.getUserByEmail(refereeEmail);
+    if (!referee) {
+      throw new Error("This email is not registered on RedPerks yet. Ask them to sign up first!");
+    }
+    if (String(referee.id).toLowerCase() === String(referrerId).toLowerCase()) {
+      throw new Error("You cannot refer a coupon to yourself!");
+    }
+    // Claim it for the referee with referred_by = referrerId
+    const claimRes = await module.exports.claimCouponForUser(referee.id, couponId, referrerId);
+
+    // Delete the coupon from the referrer's wallet
+    if (useSupabase) {
+      const { error } = await supabase
+        .from('user_claimed_coupons')
+        .delete()
+        .eq('user_id', referrerId)
+        .eq('coupon_id', couponId);
+      if (error) throw error;
+    } else {
+      const db = readDb();
+      db.user_claimed_coupons = (db.user_claimed_coupons || []).filter(
+        r => !(r.user_id === referrerId && r.coupon_id === couponId)
+      );
+      writeDb(db);
+    }
+
+    return claimRes;
   }
 };

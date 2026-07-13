@@ -36,6 +36,9 @@ class TransactionController {
             }
 
             // Safety check: verify user has remaining credit balance for any coupon redemption
+            let referrerId = null;
+            let expectedDiscount = parseFloat(discount_amount || 0);
+
             if (user_id && coupon_id) {
                 const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
                 if (totalRedemptions >= 3) {
@@ -53,6 +56,13 @@ class TransactionController {
                         success: false,
                         message: 'Coupon is not available in your Coupon Bank or has already been redeemed'
                     });
+                }
+
+                // Retrieve the actual claimed coupon record to check referred_by
+                const claim = await db.getClaimedCoupon(user_id, coupon_id);
+                if (claim && claim.referred_by && coupon && coupon.discount_type === 'flat') {
+                    referrerId = claim.referred_by;
+                    expectedDiscount = 0.80 * parseFloat(coupon.discount_value);
                 }
             }
 
@@ -96,8 +106,8 @@ class TransactionController {
                 user_id: user_id || null,
                 coupon_id: coupon_id || null,
                 bill_amount: parseFloat(bill_amount),
-                discount_amount: parseFloat(discount_amount || 0),
-                payable_amount: parseFloat(payable_amount),
+                discount_amount: referrerId ? expectedDiscount : parseFloat(discount_amount || 0),
+                payable_amount: referrerId ? Math.max(0, parseFloat(bill_amount) - expectedDiscount - cashbackAmount) : parseFloat(payable_amount),
                 cashback_applied: cashbackAmount,
                 status: 'completed', // auto-complete for coupon flow
                 created_at: new Date().toISOString()
@@ -107,11 +117,19 @@ class TransactionController {
 
             // Mark the coupon as used in the user's claimed coupons wallet
             if (user_id && coupon_id) {
-                await db.useClaimedCoupon(user_id, coupon_id);
-                if (coupon && coupon.discount_type === 'cashback') {
-                    const earned = parseFloat(coupon.discount_value || 0);
-                    if (earned > 0) {
-                        await db.incrementUserWalletBalance(user_id, earned);
+                if (referrerId) {
+                    await db.useClaimedCoupon(user_id, coupon_id);
+                    const referrerShare = 0.20 * parseFloat(coupon.discount_value);
+                    if (referrerShare > 0) {
+                        await db.incrementUserWalletBalance(referrerId, referrerShare);
+                    }
+                } else {
+                    await db.useClaimedCoupon(user_id, coupon_id);
+                    if (coupon && coupon.discount_type === 'cashback') {
+                        const earned = parseFloat(coupon.discount_value || 0);
+                        if (earned > 0) {
+                            await db.incrementUserWalletBalance(user_id, earned);
+                        }
                     }
                 }
             }

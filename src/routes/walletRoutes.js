@@ -6,5 +6,6 @@ const router = express.Router();
 router.get('/', WalletController.getUserWallet);
 router.get('/advertised', WalletController.getAdvertisedCoupons);
 router.post('/claim', WalletController.claimCoupon);
+router.post('/share', WalletController.shareCoupon);
 
 module.exports = router;

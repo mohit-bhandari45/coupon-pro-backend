@@ -45,6 +45,21 @@ class WalletController {
             return res.status(400).json({ success: false, message: error.message || 'Failed to claim coupon' });
         }
     }
+
+    static async shareCoupon(req, res) {
+        try {
+            const { referrerId, couponId, refereeEmail } = req.body;
+            if (!referrerId || !couponId || !refereeEmail) {
+                return res.status(400).json({ success: false, message: 'referrerId, couponId, and refereeEmail are required' });
+            }
+
+            const result = await db.shareCoupon(referrerId, couponId, refereeEmail.trim());
+            return res.json(result);
+        } catch (error) {
+            console.error('Error sharing coupon:', error);
+            return res.status(400).json({ success: false, message: error.message || 'Failed to share coupon' });
+        }
+    }
 }
 
 module.exports = WalletController;
