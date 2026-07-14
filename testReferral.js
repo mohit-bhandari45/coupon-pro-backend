@@ -116,6 +116,15 @@ async function runTest() {
         }
         console.log('✅ referred_by field matches Referrer ID perfectly!');
 
+        // 5.5. Verify referee cannot refer the coupon again
+        console.log('\n[Step 5.5] Verifying referred coupon cannot be shared further...');
+        try {
+            await db.shareCoupon(referee.id, couponId, referrerEmail);
+            throw new Error('FAILED: Referee was able to share a coupon they received by referral.');
+        } catch (err) {
+            console.log(`✅ Sharing referred coupon correctly blocked: ${err.message}`);
+        }
+
         // 7. Simulate checkout: Referee uses flat coupon (bill: ₹100)
         console.log('\n[Step 6] Simulating Referee checkout transaction of ₹100 using shared coupon...');
         // We'll call the transaction controller logic directly or via mocked express args

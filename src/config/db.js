@@ -792,6 +792,16 @@ module.exports = {
     if (String(referee.id).toLowerCase() === String(referrerId).toLowerCase()) {
       throw new Error("You cannot refer a coupon to yourself!");
     }
+
+    // Verify referrer has this coupon and it wasn't referred to them
+    const referrerClaim = await module.exports.getClaimedCoupon(referrerId, couponId);
+    if (!referrerClaim) {
+      throw new Error("You do not have this coupon in your wallet!");
+    }
+    if (referrerClaim.referred_by) {
+      throw new Error("You cannot share a coupon that was referred to you!");
+    }
+
     // Claim it for the referee with referred_by = referrerId
     const claimRes = await module.exports.claimCouponForUser(referee.id, couponId, referrerId);
 
