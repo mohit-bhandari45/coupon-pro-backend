@@ -138,6 +138,16 @@ Thank you for choosing RedPerks!
         return this.sendMail({ to, subject, text, html });
     }
 
+    static async sendMerchantVerificationOtp({ to, code }) {
+        const subject = `🔑 Merchant Email Verification - RedPerks`;
+        const text = `Your merchant email verification code is: ${code}. It is valid for 10 minutes.`;
+        const html = `
+            <h3>Merchant Verification Code</h3>
+            <p>Your RedPerks merchant verification code is: <strong style="font-size: 20px; color: #8b5cf6; letter-spacing: 2px;">${code}</strong></p>
+            <p>This code is valid for 10 minutes. Please verify your email to unlock your owner dashboard.</p>
+        `;
+        return this.sendMail({ to, subject, text, html });
+    }
 
     static async sendCouponCodeEmail({ to, code, title, desc_text, discount_type, discount_value, min_bill_amount }) {
         const subject = `🎁 Exclusive Promotion Code - RedPerks`;

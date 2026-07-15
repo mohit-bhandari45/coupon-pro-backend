@@ -59,6 +59,7 @@ async function initDatabase() {
             ALTER TABLE coupons ADD COLUMN IF NOT EXISTS max_claims INTEGER DEFAULT NULL;
             ALTER TABLE coupons ADD COLUMN IF NOT EXISTS funded_by VARCHAR DEFAULT 'merchant';
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS allow_platform_coupons BOOLEAN DEFAULT true;
+            ALTER TABLE cafes ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC DEFAULT 0;
             ALTER TABLE transactions ADD COLUMN IF NOT EXISTS cashback_applied NUMERIC DEFAULT 0;
             CREATE TABLE IF NOT EXISTS user_claimed_coupons (

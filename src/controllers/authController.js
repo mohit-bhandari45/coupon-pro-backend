@@ -36,13 +36,39 @@ class AuthController {
                 address
             });
 
-            const token = generateToken(cafe.id, 'cafe');
+            // Generate merchant verification OTP
+            const db = require('../config/db');
+            const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            await db.insertOtpCode({
+                email,
+                code: otpCode,
+                purpose: 'merchant_verification',
+                expires_at: expiresAt,
+                created_at: new Date().toISOString()
+            });
+
+            console.log(`
+┌────────────────────────────────────────────────────────┐
+│ ✉️  [SIMULATOR] Merchant Verification OTP dispatched   │
+├────────────────────────────────────────────────────────┤
+│ To:      ${email.padEnd(38)} │
+│ OTP:     ${otpCode.padEnd(38)} │
+│ Purpose: Merchant Email Verification                   │
+│ Expiry:  10 mins                                       │
+└────────────────────────────────────────────────────────┘
+`);
+
+            const MailService = require('../services/mailService');
+            MailService.sendMerchantVerificationOtp({ to: email, code: otpCode }).catch(err => {
+                console.error('❌ [Mailer] Email OTP sending error:', err);
+            });
 
             return res.status(201).json({
                 success: true,
-                message: 'Cafe registered successfully',
-                token,
-                cafe
+                message: 'Cafe registered successfully. Verification OTP sent.',
+                verified: false,
+                email
             });
         } catch (error) {
             console.error('Registration error:', error);
@@ -66,6 +92,44 @@ class AuthController {
             }
 
             const cafe = await CafeModel.authenticate(email, password);
+            const db = require('../config/db');
+
+            // Check if email verified
+            const cafeFull = await db.getCafeByEmail(email);
+            if (cafeFull && !cafeFull.email_verified) {
+                // Send a new verification OTP code
+                const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+                const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+                await db.insertOtpCode({
+                    email,
+                    code: otpCode,
+                    purpose: 'merchant_verification',
+                    expires_at: expiresAt,
+                    created_at: new Date().toISOString()
+                });
+                console.log(`
+┌────────────────────────────────────────────────────────┐
+│ ✉️  [SIMULATOR] Merchant Verification OTP dispatched   │
+├────────────────────────────────────────────────────────┤
+│ To:      ${email.padEnd(38)} │
+│ OTP:     ${otpCode.padEnd(38)} │
+│ Purpose: Merchant Email Verification                   │
+│ Expiry:  10 mins                                       │
+└────────────────────────────────────────────────────────┘
+`);
+                const MailService = require('../services/mailService');
+                MailService.sendMerchantVerificationOtp({ to: email, code: otpCode }).catch(err => {
+                    console.error('❌ [Mailer] Email OTP sending error:', err);
+                });
+
+                return res.status(400).json({
+                    success: false,
+                    code: 'EMAIL_UNVERIFIED',
+                    email,
+                    message: 'Email address is not verified. A verification OTP has been sent.'
+                });
+            }
+
             const token = generateToken(cafe.id, 'cafe');
 
             return res.status(200).json({
@@ -129,6 +193,54 @@ class AuthController {
         }
     }
 
+    static async verifyMerchantOtp(req, res) {
+        try {
+            const { email, code } = req.body;
+            if (!email || !code) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email and verification OTP code are required'
+                });
+            }
+
+            const db = require('../config/db');
+            const verified = await db.verifyAndUseOtpCode(email, code, 'merchant_verification');
+            if (!verified) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid or expired verification code'
+                });
+            }
+
+            const cafe = await db.getCafeByEmail(email);
+            if (!cafe) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Cafe profile not found'
+                });
+            }
+
+            await db.updateCafe(cafe.id, { email_verified: true });
+
+            const token = generateToken(cafe.id, 'cafe');
+            const { password: _, ...cafeWithoutPassword } = cafe;
+            cafeWithoutPassword.email_verified = true;
+
+            return res.status(200).json({
+                success: true,
+                message: 'Email verified successfully',
+                token,
+                cafe: cafeWithoutPassword
+            });
+        } catch (error) {
+            console.error('verifyMerchantOtp error:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Internal server error occurred'
+            });
+        }
+    }
+
     // Middleware to authorize cafe owner requests
     static async authorize(req, res, next) {
         try {
@@ -145,6 +257,10 @@ class AuthController {
 
             if (!cafe) {
                 return res.status(401).json({ success: false, message: 'Invalid token or cafe doesn\'t exist' });
+            }
+
+            if (!cafe.email_verified) {
+                return res.status(403).json({ success: false, code: 'EMAIL_UNVERIFIED', message: 'Email verification is required' });
             }
 
             const { password: _, ...cafeWithoutPassword } = cafe;

@@ -15,6 +15,7 @@ create table if not exists cafes (
     logo_url text,
     upi_id text,
     allow_platform_coupons boolean default true,
+    email_verified boolean default false,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
