@@ -55,14 +55,15 @@ class CouponController {
                 }
             }
 
-            // Check if user has exceeded their lifetime coupon limit (3 max)
+            // Check if user has exceeded their lifetime coupon limit (dynamic based on user.max_credits)
             const user = await db.getUserByEmail(email);
             if (user) {
                 const totalRedemptions = await db.getUserCouponRedemptionCount(user.id);
-                if (totalRedemptions >= 3) {
+                const maxCredits = user.max_credits !== undefined && user.max_credits !== null ? user.max_credits : 3;
+                if (totalRedemptions >= maxCredits) {
                     return res.status(400).json({
                         success: false,
-                        message: 'You have exhausted your coupon redemption credits limit (3 max)'
+                        message: `You have exhausted your coupon redemption credits limit (${maxCredits} max)`
                     });
                 }
 

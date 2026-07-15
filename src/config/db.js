@@ -157,9 +157,10 @@ module.exports = {
       return data;
     }
     const db = readDb();
-    db.users.push(user);
+    const newUser = { max_credits: 3, ...user };
+    db.users.push(newUser);
     writeDb(db);
-    return user;
+    return newUser;
   },
 
   deductUserWalletBalance: async (userId, amount) => {

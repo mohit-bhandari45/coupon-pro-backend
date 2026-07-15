@@ -61,6 +61,7 @@ async function initDatabase() {
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS allow_platform_coupons BOOLEAN DEFAULT true;
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC DEFAULT 0;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS max_credits INTEGER DEFAULT 3;
             ALTER TABLE transactions ADD COLUMN IF NOT EXISTS cashback_applied NUMERIC DEFAULT 0;
             CREATE TABLE IF NOT EXISTS user_claimed_coupons (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

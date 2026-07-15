@@ -126,9 +126,10 @@ class UserAuthController {
                 { expiresIn: '30d' }
             );
 
-            // Compute remaining credits (3 max lifetime limit)
+            // Compute remaining credits (dynamic limit based on user.max_credits)
             const count = await db.getUserCouponRedemptionCount(user.id);
-            const remainingCredits = Math.max(0, 3 - count);
+            const maxCredits = user.max_credits !== undefined && user.max_credits !== null ? user.max_credits : 3;
+            const remainingCredits = Math.max(0, maxCredits - count);
 
             return res.status(200).json({
                 success: true,
@@ -167,10 +168,11 @@ class UserAuthController {
             }
 
             const count = await db.getUserCouponRedemptionCount(user.id);
+            const maxCredits = user.max_credits !== undefined && user.max_credits !== null ? user.max_credits : 3;
             return res.status(200).json({
                 success: true,
                 count,
-                remaining: Math.max(0, 3 - count),
+                remaining: Math.max(0, maxCredits - count),
                 walletBalance: parseFloat(user.wallet_balance || 0)
             });
         } catch (error) {
