@@ -15,7 +15,7 @@ class CafeController {
             }
 
             // Fetch coupons for this cafe (will be empty for now but matches schema)
-            const coupons = await db.getCouponsByCafeId(cafe.id, true, true);
+            const coupons = await db.getCouponsByCafeId(cafe.id, true, true, true);
 
             return res.status(200).json({
                 success: true,
@@ -66,7 +66,20 @@ class CafeController {
     // Create a new coupon for Cafe Owner
     static async createCoupon(req, res) {
         try {
-            const { title, desc_text, badge_label, discount_type, discount_value, max_uses, frequency_per_day, min_bill_amount } = req.body;
+            const {
+                title,
+                desc_text,
+                badge_label,
+                discount_type,
+                discount_value,
+                max_uses,
+                frequency_per_day,
+                min_bill_amount,
+                is_advertised,
+                ad_budget,
+                ad_audience,
+                ad_duration
+            } = req.body;
             const cafeId = req.cafe.id;
 
             if (!title || !desc_text || !discount_type || discount_value === undefined) {
@@ -90,6 +103,12 @@ class CafeController {
                 max_claims: limitValue ? parseInt(limitValue) : 1,
                 min_bill_amount: min_bill_amount ? parseFloat(min_bill_amount) : 0,
                 is_active: true,
+                is_advertised: is_advertised === true || is_advertised === 'true',
+                ad_budget: ad_budget ? parseFloat(ad_budget) : 0,
+                ad_audience: ad_audience || 'All Customers',
+                ad_duration: ad_duration || '7 Days',
+                ad_impressions: 0,
+                ad_clicks: 0,
                 created_at: new Date().toISOString()
             };
 

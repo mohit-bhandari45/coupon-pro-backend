@@ -252,7 +252,7 @@ module.exports = {
     return db.transactions.filter(t => t.coupon_id === couponId && (!createdAt || new Date(t.created_at) >= new Date(createdAt))).length;
   },
 
-  getCouponsByCafeId: async (cafeId, onlyActive = false, onlyPublic = false) => {
+  getCouponsByCafeId: async (cafeId, onlyActive = false, onlyPublic = false, excludeAdvertised = false) => {
     let coupons = [];
     if (useSupabase) {
       let query = supabase.from('coupons').select('*').eq('cafe_id', cafeId);
@@ -262,6 +262,9 @@ module.exports = {
       if (onlyPublic) {
         query = query.eq('is_public', true);
       }
+      if (excludeAdvertised) {
+        query = query.eq('is_advertised', false);
+      }
       const { data, error } = await query;
       if (error) throw error;
       coupons = data || [];
@@ -269,7 +272,8 @@ module.exports = {
       const db = readDb();
       coupons = db.coupons.filter(c => c.cafe_id === cafeId &&
         (!onlyActive || c.is_active === true) &&
-        (!onlyPublic || c.is_public !== false)
+        (!onlyPublic || c.is_public !== false) &&
+        (!excludeAdvertised || c.is_advertised !== true)
       );
     }
 
@@ -554,15 +558,27 @@ module.exports = {
 
   getUserClaimedCoupons: async (userId, cafeId) => {
     if (useSupabase) {
-      const { data, error } = await supabase
+      // 0. Fetch coupon IDs used by this user in completed transactions
+      const { data: usedTxns, error: usedError } = await supabase
+        .from('transactions')
+        .select('coupon_id')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .not('coupon_id', 'is', null);
+
+      if (usedError) throw usedError;
+      const usedCouponIds = new Set((usedTxns || []).map(t => t.coupon_id));
+
+      // 1. Fetch user's claimed wallet coupons
+      const { data: claimedData, error: claimedError } = await supabase
         .from('user_claimed_coupons')
         .select('*, coupons(*)')
         .eq('user_id', userId)
         .eq('status', 'available');
 
-      if (error) throw error;
+      if (claimedError) throw claimedError;
 
-      return (data || []).map(record => {
+      const claimedMapped = (claimedData || []).map(record => {
         if (!record.coupons) return null;
         return {
           ...record.coupons,
@@ -573,11 +589,46 @@ module.exports = {
         if (!c) return false;
         return c.cafe_id === null || c.cafe_id === cafeId;
       });
+
+      // 2. Fetch active public merchant-created coupons for the cafe
+      let merchantCoupons = [];
+      if (cafeId) {
+        const { data: merchantData, error: merchantError } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('cafe_id', cafeId)
+          .eq('is_active', true)
+          .eq('is_public', true)
+          .eq('funded_by', 'merchant')
+          .eq('is_advertised', false);
+
+        if (merchantError) throw merchantError;
+        merchantCoupons = (merchantData || []).map(c => ({
+          ...c,
+          referred_by: null,
+          claim_id: null
+        }));
+      }
+
+      // 3. Merge without duplicate coupon IDs (keep claimed one if it exists)
+      const claimedIds = new Set(claimedMapped.map(c => c.id));
+      const filteredMerchant = merchantCoupons.filter(c => !claimedIds.has(c.id));
+      const mergedList = [...claimedMapped, ...filteredMerchant];
+
+      // 4. Exclude any coupons already used in completed transactions (single-use restriction)
+      return mergedList.filter(c => !usedCouponIds.has(c.id));
     }
 
+    // JSON Fallback
     const db = readDb();
+    const usedCouponIds = new Set(
+      (db.transactions || [])
+        .filter(t => t.user_id === userId && t.status === 'completed' && t.coupon_id !== null && t.coupon_id !== undefined)
+        .map(t => t.coupon_id)
+    );
+
     const claims = (db.user_claimed_coupons || []).filter(r => r.user_id === userId && r.status === 'available');
-    return claims.map(r => {
+    const claimedMapped = claims.map(r => {
       const coupon = (db.coupons || []).find(c => c.id === r.coupon_id);
       if (!coupon) return null;
       return {
@@ -589,12 +640,33 @@ module.exports = {
       if (!c) return false;
       return c.cafe_id === null || c.cafe_id === cafeId;
     });
+
+    let merchantCoupons = [];
+    if (cafeId) {
+      const dbCoupons = (db.coupons || []).filter(c =>
+        c.cafe_id === cafeId &&
+        c.is_active === true &&
+        c.is_public === true &&
+        c.funded_by === 'merchant' &&
+        c.is_advertised !== true
+      );
+      merchantCoupons = dbCoupons.map(c => ({
+        ...c,
+        referred_by: null,
+        claim_id: null
+      }));
+    }
+
+    const claimedIds = new Set(claimedMapped.map(c => c.id));
+    const filteredMerchant = merchantCoupons.filter(c => !claimedIds.has(c.id));
+    const mergedList = [...claimedMapped, ...filteredMerchant];
+
+    return mergedList.filter(c => !usedCouponIds.has(c.id));
   },
 
   getAdvertisedCoupons: async (userId) => {
-    const welcomeIds = ['WELCOME10', 'FREEBUI', 'FEST25'];
-
     if (useSupabase) {
+      // 1. Fetch active ad coupons
       const { data: allCoupons, error: couponError } = await supabase
         .from('coupons')
         .select(`
@@ -604,25 +676,36 @@ module.exports = {
           )
         `)
         .eq('is_active', true)
-        .not('id', 'in', `(${welcomeIds.join(',')})`);
+        .eq('is_advertised', true);
 
       if (couponError) throw couponError;
 
+      // 2. Fetch claimed coupons by this user
       const { data: userClaims, error: claimsError } = await supabase
         .from('user_claimed_coupons')
         .select('coupon_id')
         .eq('user_id', userId);
 
       if (claimsError) throw claimsError;
-
       const claimedSet = new Set((userClaims || []).map(r => r.coupon_id));
 
+      // 3. Fetch coupon IDs used by this user in completed transactions
+      const { data: usedTxns, error: usedError } = await supabase
+        .from('transactions')
+        .select('coupon_id')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .not('coupon_id', 'is', null);
+
+      if (usedError) throw usedError;
+      const usedCouponIds = new Set((usedTxns || []).map(t => t.coupon_id));
+
+      // 4. Fetch total claims count per coupon to check max_claims
       const { data: globalShares, error: shareError } = await supabase
         .from('user_claimed_coupons')
         .select('coupon_id');
 
       if (shareError) throw shareError;
-
       const claimCounts = {};
       (globalShares || []).forEach(r => {
         claimCounts[r.coupon_id] = (claimCounts[r.coupon_id] || 0) + 1;
@@ -630,8 +713,9 @@ module.exports = {
 
       return (allCoupons || [])
         .filter(c => {
-          if (c.cafe_id === null || c.cafe_id === undefined) return false; // Hide platform/admin coupons
+          if (c.cafe_id === null || c.cafe_id === undefined) return false;
           if (claimedSet.has(c.id)) return false;
+          if (usedCouponIds.has(c.id)) return false;
           if (c.max_claims !== null && c.max_claims !== undefined) {
             const currentClaims = claimCounts[c.id] || 0;
             if (currentClaims >= c.max_claims) return false;
@@ -640,40 +724,53 @@ module.exports = {
         })
         .map(c => ({
           ...c,
-          cafe_name: c.cafes ? c.cafes.name : 'Platform Promo'
+          cafe_name: c.cafes ? c.cafes.name : 'Partner Store'
         }))
         .slice(0, 5);
     }
 
-    const db = readDb();
+    // JSON Fallback
+    const dbData = readDb();
     const claimedSet = new Set(
-      (db.user_claimed_coupons || [])
+      (dbData.user_claimed_coupons || [])
         .filter(r => r.user_id === userId)
         .map(r => r.coupon_id)
     );
+    const usedCouponIds = new Set(
+      (dbData.transactions || [])
+        .filter(t => t.user_id === userId && t.status === 'completed' && t.coupon_id !== null)
+        .map(t => t.coupon_id)
+    );
 
     const claimCounts = {};
-    (db.user_claimed_coupons || []).forEach(r => {
+    (dbData.user_claimed_coupons || []).forEach(r => {
       claimCounts[r.coupon_id] = (claimCounts[r.coupon_id] || 0) + 1;
     });
 
-    const activeCoupons = (db.coupons || []).filter(c => {
-      return c.is_active && c.cafe_id !== null && !welcomeIds.includes(c.id) && !claimedSet.has(c.id);
-    });
+    const activeAdCoupons = (dbData.coupons || []).filter(c =>
+      c.is_active === true &&
+      c.is_advertised === true &&
+      c.cafe_id !== null
+    );
 
-    return activeCoupons.filter(c => {
-      if (c.max_claims !== undefined && c.max_claims !== null) {
-        const count = claimCounts[c.id] || 0;
-        return count < c.max_claims;
-      }
-      return true;
-    }).map(c => {
-      const cafe = (db.cafes || []).find(f => String(f.id) === String(c.cafe_id));
-      return {
-        ...c,
-        cafe_name: cafe ? cafe.name : 'Platform Promo'
-      };
-    }).slice(0, 5);
+    return activeAdCoupons
+      .filter(c => {
+        if (claimedSet.has(c.id)) return false;
+        if (usedCouponIds.has(c.id)) return false;
+        if (c.max_claims !== null && c.max_claims !== undefined) {
+          const currentClaims = claimCounts[c.id] || 0;
+          if (currentClaims >= c.max_claims) return false;
+        }
+        return true;
+      })
+      .map(c => {
+        const cafe = (dbData.cafes || []).find(cafeObj => cafeObj.id === c.cafe_id);
+        return {
+          ...c,
+          cafe_name: cafe ? cafe.name : 'Partner Store'
+        };
+      })
+      .slice(0, 5);
   },
 
   claimCouponForUser: async (userId, couponId, referredBy = null) => {

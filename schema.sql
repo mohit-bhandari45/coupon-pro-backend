@@ -34,6 +34,12 @@ create table if not exists coupons (
     is_public boolean default true, -- Hidden/code-only vs public loyalty rewards
     max_claims integer default null,
     funded_by text default 'merchant',
+    is_advertised boolean default false,
+    ad_budget numeric default 0,
+    ad_audience text default 'All Customers',
+    ad_duration text default '7 Days',
+    ad_impressions integer default 0,
+    ad_clicks integer default 0,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 

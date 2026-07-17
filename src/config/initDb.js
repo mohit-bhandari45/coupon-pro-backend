@@ -58,6 +58,12 @@ async function initDatabase() {
         await client.query(`
             ALTER TABLE coupons ADD COLUMN IF NOT EXISTS max_claims INTEGER DEFAULT NULL;
             ALTER TABLE coupons ADD COLUMN IF NOT EXISTS funded_by VARCHAR DEFAULT 'merchant';
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS is_advertised BOOLEAN DEFAULT false;
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS ad_budget NUMERIC DEFAULT 0;
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS ad_audience TEXT DEFAULT 'All Customers';
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS ad_duration TEXT DEFAULT '7 Days';
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS ad_impressions INTEGER DEFAULT 0;
+            ALTER TABLE coupons ADD COLUMN IF NOT EXISTS ad_clicks INTEGER DEFAULT 0;
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS allow_platform_coupons BOOLEAN DEFAULT true;
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC DEFAULT 0;

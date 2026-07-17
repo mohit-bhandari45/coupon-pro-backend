@@ -22,7 +22,6 @@ class WalletController {
             if (!userId) {
                 return res.status(400).json({ success: false, message: 'userId is required' });
             }
-
             const coupons = await db.getAdvertisedCoupons(userId);
             return res.json({ success: true, coupons });
         } catch (error) {
