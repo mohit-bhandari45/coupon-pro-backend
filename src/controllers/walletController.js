@@ -59,6 +59,47 @@ class WalletController {
             return res.status(400).json({ success: false, message: error.message || 'Failed to share coupon' });
         }
     }
+
+    static async getUserCredits(req, res) {
+        try {
+            const { userId, cafeId } = req.query;
+            if (!userId) {
+                return res.status(400).json({ success: false, message: 'userId is required' });
+            }
+            const balances = await db.getUserBalances(userId, cafeId);
+            return res.json({ success: true, ...balances });
+        } catch (error) {
+            console.error('Error fetching user credits:', error);
+            return res.status(500).json({ success: false, message: 'Failed to fetch user credits balance' });
+        }
+    }
+
+    static async earnCredit(req, res) {
+        try {
+            const { userId, actionType, cafeId } = req.body;
+            if (!userId || !actionType) {
+                return res.status(400).json({ success: false, message: 'userId and actionType are required' });
+            }
+
+            if (actionType === 'watch-ad' || actionType === 'follow-ig') {
+                await db.incrementPlatformCredits(userId, 1);
+            } else if (actionType === 'cafe-survey') {
+                if (!cafeId) return res.status(400).json({ success: false, message: 'cafeId is required for merchant survey credit' });
+                await db.incrementMerchantCredits(userId, cafeId, 2);
+            } else if (actionType === 'cafe-video' || actionType === 'cafe-social-follow') {
+                if (!cafeId) return res.status(400).json({ success: false, message: 'cafeId is required for merchant credit' });
+                await db.incrementMerchantCredits(userId, cafeId, 1);
+            } else {
+                return res.status(400).json({ success: false, message: 'Invalid actionType' });
+            }
+
+            const balances = await db.getUserBalances(userId, cafeId);
+            return res.json({ success: true, message: 'Credits awarded successfully!', ...balances });
+        } catch (error) {
+            console.error('Error earning credit:', error);
+            return res.status(500).json({ success: false, message: 'Failed to earn credit' });
+        }
+    }
 }
 
 module.exports = WalletController;

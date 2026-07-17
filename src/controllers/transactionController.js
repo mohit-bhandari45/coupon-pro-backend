@@ -40,12 +40,12 @@ class TransactionController {
             let expectedDiscount = parseFloat(discount_amount || 0);
 
             if (user_id && coupon_id) {
-                const totalRedemptions = await db.getUserCouponRedemptionCount(user_id);
-                const maxCredits = user.max_credits !== undefined && user.max_credits !== null ? user.max_credits : 3;
-                if (totalRedemptions >= maxCredits) {
+                const balances = await db.getUserBalances(user_id, cafe_id);
+                const totalCredits = (balances.platform || 0) + (balances.merchant || 0);
+                if (totalCredits <= 0) {
                     return res.status(400).json({
                         success: false,
-                        message: `You have exhausted your coupon redemption credits balance (${maxCredits} max)`
+                        message: 'You have exhausted your coupon redemption credits balance. Current balance is 0 credits. Please earn more credits to checkout.'
                     });
                 }
 
@@ -118,6 +118,9 @@ class TransactionController {
 
             // Mark the coupon as used in the user's claimed coupons wallet
             if (user_id && coupon_id) {
+                // Deduct 1 credit (prioritizing merchant credits first)
+                await db.deductCreditForTransaction(user_id, cafe_id);
+
                 if (referrerId) {
                     await db.useClaimedCoupon(user_id, coupon_id);
                     const referrerShare = 0.20 * parseFloat(coupon.discount_value);

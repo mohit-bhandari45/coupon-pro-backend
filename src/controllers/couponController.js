@@ -55,15 +55,17 @@ class CouponController {
                 }
             }
 
-            // Check if user has exceeded their lifetime coupon limit (dynamic based on user.max_credits)
+            // Check if user has exceeded their coupon redemption credits balance (platform + merchant credits)
             const user = await db.getUserByEmail(email);
             if (user) {
-                const totalRedemptions = await db.getUserCouponRedemptionCount(user.id);
-                const maxCredits = user.max_credits !== undefined && user.max_credits !== null ? user.max_credits : 3;
-                if (totalRedemptions >= maxCredits) {
+                const cafe = await db.getCafeBySlug(cafeSlug);
+                const cafeId = cafe ? cafe.id : null;
+                const balances = await db.getUserBalances(user.id, cafeId);
+                const totalCredits = (balances.platform || 0) + (balances.merchant || 0);
+                if (totalCredits <= 0) {
                     return res.status(400).json({
                         success: false,
-                        message: `You have exhausted your coupon redemption credits limit (${maxCredits} max)`
+                        message: 'You have exhausted your coupon redemption credits balance. Current balance is 0 credits. Please earn more credits to redeem.'
                     });
                 }
 

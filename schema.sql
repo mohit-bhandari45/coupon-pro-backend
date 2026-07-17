@@ -49,6 +49,7 @@ create table if not exists users (
     email text unique not null,
     name text,
     max_credits integer default 3,
+    platform_credits integer default 3,
     created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -109,4 +110,16 @@ create table if not exists user_claimed_coupons (
 
 create index if not exists idx_user_claimed_coupons_user_id on user_claimed_coupons(user_id);
 alter table user_claimed_coupons disable row level security;
+
+-- 8. User Merchant Credits Table
+create table if not exists user_merchant_credits (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references users(id) on delete cascade,
+    cafe_id uuid references cafes(id) on delete cascade,
+    credits integer default 0,
+    unique(user_id, cafe_id)
+);
+
+create index if not exists idx_user_merchant_credits_user_id on user_merchant_credits(user_id);
+alter table user_merchant_credits disable row level security;
 

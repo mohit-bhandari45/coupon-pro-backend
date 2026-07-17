@@ -68,6 +68,8 @@ async function initDatabase() {
             ALTER TABLE cafes ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC DEFAULT 0;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS max_credits INTEGER DEFAULT 3;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_credits INTEGER DEFAULT 3;
+            UPDATE users SET platform_credits = max_credits WHERE platform_credits = 3 AND max_credits IS NOT NULL;
             ALTER TABLE transactions ADD COLUMN IF NOT EXISTS cashback_applied NUMERIC DEFAULT 0;
             CREATE TABLE IF NOT EXISTS user_claimed_coupons (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -78,11 +80,25 @@ async function initDatabase() {
                 UNIQUE(user_id, coupon_id)
             );
             ALTER TABLE user_claimed_coupons ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES users(id) ON DELETE SET NULL;
+            CREATE TABLE IF NOT EXISTS user_merchant_credits (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                cafe_id UUID REFERENCES cafes(id) ON DELETE CASCADE,
+                credits INTEGER DEFAULT 0,
+                UNIQUE(user_id, cafe_id)
+            );
         `);
         try {
             await client.query(`ALTER TABLE user_claimed_coupons DISABLE ROW LEVEL SECURITY;`);
         } catch (e) {
             // Silence if already disabled
+        }
+
+        try {
+            await client.query("NOTIFY pgrst, 'reload schema';");
+            console.log('✅ [Database] PostgREST schema cache reload notified.');
+        } catch (e) {
+            // Silence if not applicable
         }
 
         // Seed 3 welcome coupons on server launch

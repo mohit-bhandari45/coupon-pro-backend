@@ -152,12 +152,19 @@ module.exports = {
 
   insertUser: async (user) => {
     if (useSupabase) {
-      const { data, error } = await supabase.from('users').insert(user).select().single();
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          ...user,
+          platform_credits: user.platform_credits !== undefined ? user.platform_credits : (user.max_credits !== undefined ? user.max_credits : 3)
+        })
+        .select()
+        .single();
       if (error) throw error;
       return data;
     }
     const db = readDb();
-    const newUser = { max_credits: 3, ...user };
+    const newUser = { max_credits: 3, platform_credits: 3, ...user };
     db.users.push(newUser);
     writeDb(db);
     return newUser;
@@ -920,5 +927,192 @@ module.exports = {
     }
 
     return claimRes;
+  },
+
+  getUserBalances: async (userId, cafeId) => {
+    if (useSupabase) {
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('platform_credits')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userError) throw userError;
+      const platform = user ? (user.platform_credits ?? 0) : 0;
+
+      let merchant = 0;
+      if (cafeId) {
+        const { data: mCredits, error: mError } = await supabase
+          .from('user_merchant_credits')
+          .select('credits')
+          .eq('user_id', userId)
+          .eq('cafe_id', cafeId)
+          .maybeSingle();
+
+        if (mError) throw mError;
+        merchant = mCredits ? (mCredits.credits ?? 0) : 0;
+      }
+
+      return { platform, merchant };
+    }
+
+    // JSON Fallback
+    const db = readDb();
+    const user = (db.users || []).find(u => u.id === userId);
+    const platform = user ? (user.platform_credits ?? 0) : 0;
+
+    let merchant = 0;
+    if (cafeId) {
+      const mCredits = (db.user_merchant_credits || []).find(mc => mc.user_id === userId && mc.cafe_id === cafeId);
+      merchant = mCredits ? (mCredits.credits ?? 0) : 0;
+    }
+
+    return { platform, merchant };
+  },
+
+  incrementPlatformCredits: async (userId, amount) => {
+    const val = parseInt(amount || 0);
+    if (useSupabase) {
+      // 1. Fetch current platform credits
+      const { data: user, error: fetchErr } = await supabase
+        .from('users')
+        .select('platform_credits')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      const current = user ? (user.platform_credits ?? 0) : 0;
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({ platform_credits: current + val })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+
+    const db = readDb();
+    const user = (db.users || []).find(u => u.id === userId);
+    if (user) {
+      user.platform_credits = (user.platform_credits ?? 0) + val;
+      writeDb(db);
+    }
+    return user;
+  },
+
+  incrementMerchantCredits: async (userId, cafeId, amount) => {
+    const val = parseInt(amount || 0);
+    if (useSupabase) {
+      // Upsert user_merchant_credits
+      const { data: current, error: fetchErr } = await supabase
+        .from('user_merchant_credits')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('cafe_id', cafeId)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+
+      let result;
+      if (current) {
+        const { data, error } = await supabase
+          .from('user_merchant_credits')
+          .update({ credits: (current.credits ?? 0) + val })
+          .eq('id', current.id)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      } else {
+        const { data, error } = await supabase
+          .from('user_merchant_credits')
+          .insert({ user_id: userId, cafe_id: cafeId, credits: val })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+      }
+      return result;
+    }
+
+    const db = readDb();
+    if (!db.user_merchant_credits) db.user_merchant_credits = [];
+    const mc = db.user_merchant_credits.find(r => r.user_id === userId && r.cafe_id === cafeId);
+    if (mc) {
+      mc.credits = (mc.credits ?? 0) + val;
+    } else {
+      const newMc = {
+        id: 'mc-' + Math.floor(100000 + Math.random() * 900000),
+        user_id: userId,
+        cafe_id: cafeId,
+        credits: val
+      };
+      db.user_merchant_credits.push(newMc);
+    }
+    writeDb(db);
+    return mc;
+  },
+
+  deductCreditForTransaction: async (userId, cafeId) => {
+    if (useSupabase) {
+      // 1. Check merchant credits
+      const { data: mc, error: mcError } = await supabase
+        .from('user_merchant_credits')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('cafe_id', cafeId)
+        .maybeSingle();
+
+      if (mcError) throw mcError;
+
+      if (mc && (mc.credits ?? 0) > 0) {
+        // Subtract from merchant credits
+        const { error } = await supabase
+          .from('user_merchant_credits')
+          .update({ credits: mc.credits - 1 })
+          .eq('id', mc.id);
+        if (error) throw error;
+        return { type: 'merchant' };
+      }
+
+      // 2. Otherwise subtract from platform credits
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('platform_credits')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userError) throw userError;
+      const currentVal = user ? (user.platform_credits ?? 0) : 0;
+
+      const { error } = await supabase
+        .from('users')
+        .update({ platform_credits: Math.max(0, currentVal - 1) })
+        .eq('id', userId);
+
+      if (error) throw error;
+      return { type: 'platform' };
+    }
+
+    // JSON Fallback
+    const db = readDb();
+    if (!db.user_merchant_credits) db.user_merchant_credits = [];
+    const mc = db.user_merchant_credits.find(r => r.user_id === userId && r.cafe_id === cafeId);
+
+    if (mc && (mc.credits ?? 0) > 0) {
+      mc.credits -= 1;
+      writeDb(db);
+      return { type: 'merchant' };
+    }
+
+    const user = (db.users || []).find(u => u.id === userId);
+    if (user) {
+      user.platform_credits = Math.max(0, (user.platform_credits ?? 0) - 1);
+      writeDb(db);
+    }
+    return { type: 'platform' };
   }
 };
